@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeatherLoad | 기상 데이터 에너지 부하 분석</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel (JSX 변환용) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Pretendard 폰트 (고급스러운 한글 폰트) -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+
+  <style>
+    body { font-family: 'Pretendard', -apple-system, sans-serif; }
+    /* 부드러운 스크롤 및 스크롤바 커스텀 */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
+
+  <!-- Tailwind 커스텀 설정 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6',
+              600: '#2563eb', 700: '#1d4ed8', 900: '#1e3a8a'
+            }
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-in-out',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // 네비게이션 메뉴 데이터
+    const NAV_ITEMS = [
+      { id: 'dashboard', label: '대시보드', icon: 'layout-dashboard' },
+      { id: 'collect', label: '데이터 수집/정제', icon: 'database' },
+      { id: 'eda', label: '탐색적 분석(EDA)', icon: 'bar-chart-3' },
+      { id: 'forecast', label: '시계열 예측', icon: 'trending-up' },
+      { id: 'report', label: '리포트', icon: 'file-text' },
+    ];
+
+    // ===== GNB (상단 네비게이션 바) =====
+    function Navbar({ activeMenu, setActiveMenu, onMenuToggle }) {
+      return (
+        <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              {/* 로고 영역 */}
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-brand-500/30">
+                  W
+                </div>
+                <span className="text-lg font-bold tracking-tight text-slate-900">
+                  Weather<span className="text-brand-600">Load</span>
+                </span>
+              </div>
+
+              {/* 데스크탑 메뉴 */}
+              <nav className="hidden md:flex items-center gap-1">
+                {NAV_ITEMS.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveMenu(item.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      activeMenu === item.id
+                        ? 'bg-brand-50 text-brand-700'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+
+              {/* 모바일 햄버거 버튼 */}
+              <button
+                onClick={onMenuToggle}
+                className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition"
+              >
+                <i data-lucide="menu" className="w-6 h-6"></i>
+              </button>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ===== 모바일 사이드 메뉴 =====
+    function MobileMenu({ isOpen, activeMenu, setActiveMenu, onClose }) {
+      if (!isOpen) return null;
+      return (
+        <div className="md:hidden fixed inset-0 z-50">
+          {/* 배경 오버레이 */}
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
+          {/* 메뉴 패널 */}
+          <div className="absolute top-0 right-0 w-64 h-full bg-white shadow-2xl p-4 animate-fade-in">
+            <div className="flex justify-between items-center mb-6 pt-2">
+              <span className="font-bold text-slate-900">메뉴</span>
+              <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
+                <i data-lucide="x" className="w-5 h-5"></i>
+              </button>
+            </div>
+            <nav className="flex flex-col gap-1">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveMenu(item.id); onClose(); }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
+                    activeMenu === item.id
+                      ? 'bg-brand-50 text-brand-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <i data-lucide={item.icon} className="w-5 h-5"></i>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+      );
+    }
+
+    // ===== 메인 콘텐츠 영역 =====
+    function MainContent({ activeMenu }) {
+      const current = NAV_ITEMS.find((i) => i.id === activeMenu);
+      return (
+        <main className="pt-16 min-h-screen">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* 페이지 헤더 */}
+            <div className="mb-8 animate-fade-in">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center">
+                  <i data-lucide={current.icon} className="w-5 h-5 text-brand-600"></i>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900">{current.label}</h1>
+              </div>
+              <p className="text-slate-500 text-sm">기상 데이터 기반 냉난방 에너지 부하 분석 서비스</p>
+            </div>
+
+            {/* 콘텐츠 카드 (자리 표시자) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center mb-4">
+                    <i data-lucide="activity" className="w-6 h-6 text-brand-600"></i>
+                  </div>
+                  <h3 className="font-semibold text-slate-900 mb-1">카드 영역 {n}</h3>
+                  <p className="text-sm text-slate-500">여기에 '{current.label}' 콘텐츠가 들어갑니다.</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    // ===== 앱 루트 =====
+    function App() {
+      const [activeMenu, setActiveMenu] = useState('dashboard');
+      const [mobileOpen, setMobileOpen] = useState(false);
+
+      // 아이콘 렌더링 (메뉴 변경 시마다 갱신)
+      useEffect(() => {
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      return (
+        <div>
+          <Navbar
+            activeMenu={activeMenu}
+            setActiveMenu={setActiveMenu}
+            onMenuToggle={() => setMobileOpen(true)}
+          />
+          <MobileMenu
+            isOpen={mobileOpen}
+            activeMenu={activeMenu}
+            setActiveMenu={setActiveMenu}
+            onClose={() => setMobileOpen(false)}
+          />
+          <MainContent activeMenu={activeMenu} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
