@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>데이터 수집/정제</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    // ── 더미 데이터 (나중에 실제 API 응답으로 교체) ──
+    const MOCK_STATIONS = [
+      { id: "108", name: "서울" },
+      { id: "159", name: "부산" },
+      { id: "143", name: "대구" },
+      { id: "156", name: "광주" },
+      { id: "133", name: "대전" },
+    ];
+
+    const MOCK_DATA = [
+      { time: "2024-01-01 00:00", temp: -3.2, humidity: 65, sunshine: 0.0, status: "정상" },
+      { time: "2024-01-01 01:00", temp: -4.1, humidity: 68, sunshine: 0.0, status: "정상" },
+      { time: "2024-01-01 02:00", temp: null, humidity: 70, sunshine: 0.0, status: "결측" },
+      { time: "2024-01-01 03:00", temp: -5.0, humidity: 72, sunshine: 0.0, status: "정상" },
+      { time: "2024-01-01 04:00", temp: 45.7, humidity: 71, sunshine: 0.0, status: "이상" },
+      { time: "2024-01-01 05:00", temp: -5.3, humidity: 73, sunshine: 0.0, status: "정상" },
+      { time: "2024-01-01 06:00", temp: -4.8, humidity: 70, sunshine: 0.1, status: "정상" },
+      { time: "2024-01-01 07:00", temp: -3.9, humidity: 67, sunshine: 0.5, status: "정상" },
+    ];
+
+    function App() {
+      const [station, setStation] = useState("108");
+      const [startDate, setStartDate] = useState("2024-01-01");
+      const [endDate, setEndDate] = useState("2024-01-31");
+      const [loading, setLoading] = useState(false);
+      const [data, setData] = useState([]);
+      const [loaded, setLoaded] = useState(false);
+
+      // API 호출 시뮬레이션 (나중에 fetch로 교체)
+      const handleFetch = () => {
+        setLoading(true);
+        setLoaded(false);
+        setTimeout(() => {
+          setData(MOCK_DATA);
+          setLoading(false);
+          setLoaded(true);
+        }, 800);
+      };
+
+      // 통계 계산
+      const total = data.length;
+      const missing = data.filter((d) => d.status === "결측").length;
+      const outlier = data.filter((d) => d.status === "이상").length;
+      const normal = total - missing - outlier;
+
+      const statusColor = (s) =>
+        s === "정상" ? "bg-green-100 text-green-700"
+        : s === "결측" ? "bg-yellow-100 text-yellow-700"
+        : "bg-red-100 text-red-700";
+
+      return (
+        <div className="max-w-5xl mx-auto p-6">
+          <h1 className="text-2xl font-bold text-gray-800 mb-1">데이터 수집 / 정제</h1>
+          <p className="text-gray-500 mb-6">기상청 ASOS 시간자료를 수집하고 품질을 진단합니다.</p>
+
+          {/* ── 1단계: 수집 조건 설정 ── */}
+          <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">
+              <span className="text-blue-500">1</span> 수집 조건 설정
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">관측소</label>
+                <select
+                  value={station}
+                  onChange={(e) => setStation(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                >
+                  {MOCK_STATIONS.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.id})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">시작일</label>
+                <input type="date" value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">종료일</label>
+                <input type="date" value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2" />
+              </div>
+              <div className="flex items-end">
+                <button onClick={handleFetch} disabled={loading}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-lg px-4 py-2 font-medium disabled:opacity-50">
+                  {loading ? "수집 중..." : "데이터 수집"}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* ── 2단계: 품질 요약 ── */}
+          {loaded && (
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <p className="text-sm text-gray-500">전체</p>
+                <p className="text-2xl font-bold text-gray-800">{total}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <p className="text-sm text-gray-500">정상</p>
+                <p className="text-2xl font-bold text-green-600">{normal}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <p className="text-sm text-gray-500">결측</p>
+                <p className="text-2xl font-bold text-yellow-600">{missing}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <p className="text-sm text-gray-500">이상치</p>
+                <p className="text-2xl font-bold text-red-600">{outlier}</p>
+              </div>
+            </section>
+          )}
+
+          {/* ── 3단계: 데이터 미리보기 ── */}
+          {loaded && (
+            <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-gray-800">
+                  <span className="text-blue-500">2</span> 데이터 미리보기
+                </h2>
+                <button className="text-sm bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5">
+                  결측/이상치 정제
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-gray-500 text-left">
+                      <th className="py-2 px-3">시각</th>
+                      <th className="py-2 px-3">기온(℃)</th>
+                      <th className="py-2 px-3">습도(%)</th>
+                      <th className="py-2 px-3">일조(hr)</th>
+                      <th className="py-2 px-3">상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((row, i) => (
+                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-2 px-3">{row.time}</td>
+                        <td className="py-2 px-3">{row.temp ?? "—"}</td>
+                        <td className="py-2 px-3">{row.humidity}</td>
+                        <td className="py-2 px-3">{row.sunshine}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(row.status)}`}>
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* 초기 안내 */}
+          {!loaded && !loading && (
+            <div className="text-center text-gray-400 py-16">
+              조건을 설정하고 <b>데이터 수집</b> 버튼을 눌러주세요.
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
