@@ -57,7 +57,7 @@ def calculate_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
     df["wind_chill"] = df.apply(calc_wind_chill, axis=1)
     df["load_kw"] = 100.0 + (df["cdd"] * 24.0 * 6.5) + (df["hdd"] * 24.0 * 5.0) + (df["ss"] * 4.0)
 
-    # 4. 최종 저장용 텍스트 생성 (예: "결측 → 전방대치")
+    # 4. 최종 저장용 텍스트 생성
     def set_final_status(row):
         if row["orig_quality"] == "결측": return "결측 → 전방대치"
         if row["orig_quality"] == "이상": return "이상 → 임계보정"
@@ -229,6 +229,41 @@ async def view_weather_data(stn: str, date: str):
         daily = [dict(row) for row in cursor.fetchall()]
         
         return {"hourly": hourly, "daily": daily[0] if daily else None}
+    finally:
+        conn.close()
+
+# ─── 신규: EDA 데이터 제공 API ───
+@app.get("/api/weather/eda")
+async def get_eda_data(stn: str, startDate: str, endDate: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # 시간별 상세 추세용
+        cursor.execute("""
+            SELECT tm, ta, hm, ss, di, cdd, hdd, load_kw 
+            FROM weather_hourly 
+            WHERE stn_id=? AND tm >= ? AND tm <= ? 
+            ORDER BY tm
+        """, (stn, f"{startDate} 00:00", f"{endDate} 23:59"))
+        hourly = [dict(row) for row in cursor.fetchall()]
+
+        # 일별 통계치 (일평균/일합산)
+        cursor.execute("""
+            SELECT 
+                substr(tm, 1, 10) as ymd,
+                AVG(ta) as avg_ta,
+                MAX(ta) as max_ta,
+                SUM(cdd) as sum_cdd,
+                SUM(hdd) as sum_hdd,
+                SUM(load_kw) as sum_load
+            FROM weather_hourly
+            WHERE stn_id=? AND tm >= ? AND tm <= ?
+            GROUP BY substr(tm, 1, 10)
+            ORDER BY ymd
+        """, (stn, f"{startDate} 00:00", f"{endDate} 23:59"))
+        daily_agg = [dict(row) for row in cursor.fetchall()]
+
+        return {"hourly": hourly, "daily": daily_agg}
     finally:
         conn.close()
 
