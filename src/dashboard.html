@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ko">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>대시보드 | WeatherLoad</title>
+
+		<!-- Tailwind CSS CDN -->
+		<script src="https://cdn.tailwindcss.com"></script>
+		<!-- React & ReactDOM CDN -->
+		<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+		<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+		<!-- Babel (JSX 변환) -->
+		<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+		<!-- Lucide Icons -->
+		<script src="https://unpkg.com/lucide@latest"></script>
+		<!-- Chart.js CDN -->
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+		<!-- Pretendard 폰트 -->
+		<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+
+		<style>
+			body {
+				font-family:
+					"Pretendard",
+					-apple-system,
+					sans-serif;
+			}
+			::-webkit-scrollbar {
+				width: 6px;
+				height: 6px;
+			}
+			::-webkit-scrollbar-thumb {
+				background: #cbd5e1;
+				border-radius: 3px;
+			}
+			::-webkit-scrollbar-track {
+				background: transparent;
+			}
+		</style>
+
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							brand: {
+								50: "#eff6ff",
+								100: "#dbeafe",
+								500: "#3b82f6",
+								600: "#2563eb",
+								700: "#1d4ed8",
+								900: "#1e3a8a",
+							},
+						},
+					},
+				},
+			};
+		</script>
+	</head>
+	<body class="bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
+		<div id="root"></div>
+
+		<script type="text/babel">
+			const { useState, useEffect, useRef } = React;
+
+			// 더미 지표 데이터
+			const SUMMARY_METRICS = [
+				{
+					title: "평균 기온 / 체감온도",
+					value: "27.8℃",
+					subValue: "체감 29.4℃",
+					change: "+1.8℃ (전일 대비)",
+					isUp: true,
+					icon: "thermometer",
+					badgeColor: "bg-red-50 text-red-600 border-red-100",
+				},
+				{
+					title: "냉방도일 (CDD)",
+					value: "4.2",
+					subValue: "기준온도: 24℃",
+					change: "냉방 부하 수요 증가",
+					isUp: true,
+					icon: "sun",
+					badgeColor: "bg-amber-50 text-amber-600 border-amber-100",
+				},
+				{
+					title: "불쾌지수 (DI)",
+					value: "76.4",
+					subValue: "단계: 보통~높음",
+					change: "오후 14시 피크 (80.1)",
+					isUp: true,
+					icon: "activity",
+					badgeColor: "bg-purple-50 text-purple-600 border-purple-100",
+				},
+				{
+					title: "예상 에너지 피크 부하",
+					value: "84.5%",
+					subValue: "최대 4.8 kW/h",
+					change: "전체 87% 가동 예상",
+					isUp: false,
+					icon: "zap",
+					badgeColor: "bg-blue-50 text-blue-600 border-blue-100",
+				},
+			];
+
+			function Dashboard() {
+				const [station, setStation] = useState("108");
+				const [period, setPeriod] = useState("24h");
+
+				const trendChartRef = useRef(null);
+				const loadChartRef = useRef(null);
+				const trendInstance = useRef(null);
+				const loadInstance = useRef(null);
+
+				// 아이콘 및 차트 초기화
+				useEffect(() => {
+					if (window.lucide) window.lucide.createIcons();
+
+					// 1. 기온 및 체감온도 시계열 차트
+					if (trendChartRef.current) {
+						if (trendInstance.current) trendInstance.current.destroy();
+
+						const ctx = trendChartRef.current.getContext("2d");
+						trendInstance.current = new Chart(ctx, {
+							type: "line",
+							data: {
+								labels: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "24:00"],
+								datasets: [
+									{
+										label: "기온 (℃)",
+										data: [23.1, 22.4, 21.8, 25.2, 29.5, 31.2, 28.6, 26.1, 24.8],
+										borderColor: "#2563eb",
+										backgroundColor: "rgba(37, 99, 235, 0.08)",
+										fill: true,
+										tension: 0.35,
+										pointRadius: 4,
+										pointHoverRadius: 6,
+									},
+									{
+										label: "체감온도 (℃)",
+										data: [24.0, 23.1, 22.3, 26.5, 31.4, 33.1, 30.2, 27.4, 25.9],
+										borderColor: "#f97316",
+										borderDash: [4, 4],
+										fill: false,
+										tension: 0.35,
+										pointRadius: 3,
+									},
+								],
+							},
+							options: {
+								responsive: true,
+								maintainAspectRatio: false,
+								plugins: {
+									legend: { position: "top", align: "end" },
+								},
+								scales: {
+									y: {
+										grid: { color: "#f1f5f9" },
+										ticks: { callback: (v) => `${v}℃` },
+									},
+									x: {
+										grid: { display: false },
+									},
+								},
+							},
+						});
+					}
+
+					// 2. 시간대별 냉·난방 부하 추정치 차트
+					if (loadChartRef.current) {
+						if (loadInstance.current) loadInstance.current.destroy();
+
+						const ctx = loadChartRef.current.getContext("2d");
+						loadInstance.current = new Chart(ctx, {
+							type: "bar",
+							data: {
+								labels: ["새벽(00-06)", "오전(06-12)", "오후(12-18)", "야간(18-24)"],
+								datasets: [
+									{
+										label: "냉방 부하(CDD 지수)",
+										data: [1.2, 3.8, 7.6, 3.1],
+										backgroundColor: "#38bdf8",
+										borderRadius: 6,
+									},
+									{
+										label: "난방 부하(HDD 지수)",
+										data: [0.0, 0.0, 0.0, 0.0],
+										backgroundColor: "#fb7185",
+										borderRadius: 6,
+									},
+								],
+							},
+							options: {
+								responsive: true,
+								maintainAspectRatio: false,
+								plugins: {
+									legend: { position: "top", align: "end" },
+								},
+								scales: {
+									y: {
+										beginAtZero: true,
+										grid: { color: "#f1f5f9" },
+									},
+									x: {
+										grid: { display: false },
+									},
+								},
+							},
+						});
+					}
+
+					return () => {
+						if (trendInstance.current) trendInstance.current.destroy();
+						if (loadInstance.current) loadInstance.current.destroy();
+					};
+				}, [period, station]);
+
+				return (
+					<div className="max-w-7xl mx-auto space-y-6">
+						{/* 상단 컨트롤 바 */}
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+							<div>
+								<h1 className="text-xl font-bold text-slate-900">에너지 부하 모니터링 종합 대시보드</h1>
+								<p className="text-xs sm:text-sm text-slate-500 mt-0.5">ASOS 기상 관측값 기반 실시간 파생지표 및 냉난방 부하 통계</p>
+							</div>
+
+							<div className="flex items-center gap-3">
+								<select value={station} onChange={(e) => setStation(e.target.value)} className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2 font-medium focus:ring-2 focus:ring-brand-500 outline-none">
+									<option value="108">서울 (108)</option>
+									<option value="159">부산 (159)</option>
+									<option value="143">대구 (143)</option>
+									<option value="156">광주 (156)</option>
+									<option value="133">대전 (133)</option>
+								</select>
+
+								<div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
+									{["24h", "7d", "30d"].map((p) => (
+										<button key={p} onClick={() => setPeriod(p)} className={`px-3 py-1.5 rounded-lg transition ${period === p ? "bg-white text-brand-600 shadow-sm" : "hover:text-slate-900"}`}>
+											{p.toUpperCase()}
+										</button>
+									))}
+								</div>
+							</div>
+						</div>
+
+						{/* 핵심 지표 요약 카드 (4개) */}
+						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+							{SUMMARY_METRICS.map((item, idx) => (
+								<div key={idx} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition">
+									<div className="flex items-center justify-between mb-3">
+										<span className="text-xs font-medium text-slate-500">{item.title}</span>
+										<div className={`p-2 rounded-xl border ${item.badgeColor}`}>
+											<i data-lucide={item.icon} className="w-4 h-4"></i>
+										</div>
+									</div>
+									<div className="flex items-baseline gap-2">
+										<span className="text-2xl font-bold text-slate-900">{item.value}</span>
+										<span className="text-xs font-semibold text-slate-400">{item.subValue}</span>
+									</div>
+									<div className="mt-2 text-xs text-slate-500 flex items-center gap-1">
+										<span>{item.change}</span>
+									</div>
+								</div>
+							))}
+						</div>
+
+						{/* 주요 분석 차트 영역 (2열 배치) */}
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+							{/* 1. 기온 및 체감온도 시계열 */}
+							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+								<div className="flex justify-between items-center mb-4">
+									<div>
+										<h3 className="font-bold text-slate-900 text-base">기온 및 체감온도 추이</h3>
+										<p className="text-xs text-slate-400">시간대별 기온과 습도/바람을 반영한 체감온도</p>
+									</div>
+									<span className="text-xs bg-brand-50 text-brand-700 font-medium px-2.5 py-1 rounded-lg">실시간 연동</span>
+								</div>
+								<div className="h-64 w-full">
+									<canvas ref={trendChartRef}></canvas>
+								</div>
+							</div>
+
+							{/* 2. 시간대별 부하량 분포 */}
+							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+								<div className="flex justify-between items-center mb-4">
+									<div>
+										<h3 className="font-bold text-slate-900 text-base">시간대별 냉·난방 부하 강도</h3>
+										<p className="text-xs text-slate-400">구간별 CDD/HDD 기준 부하 누적 지수</p>
+									</div>
+									<span className="text-xs bg-slate-100 text-slate-600 font-medium px-2.5 py-1 rounded-lg">누적 통계</span>
+								</div>
+								<div className="h-64 w-full">
+									<canvas ref={loadChartRef}></canvas>
+								</div>
+							</div>
+						</div>
+
+						{/* 분석 인사이트 & 피크 부하 권고안 */}
+						<div className="bg-gradient-to-r from-brand-600 to-indigo-700 text-white rounded-2xl p-6 shadow-md shadow-brand-500/10">
+							<div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+								<div className="space-y-1">
+									<div className="flex items-center gap-2">
+										<span className="bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-xs font-semibold">💡 AI 에너지 부하 분석 인사이트</span>
+									</div>
+									<h4 className="text-lg font-bold">오후 13:00 ~ 16:00 구간 냉방 부하 임계점 도달</h4>
+									<p className="text-xs md:text-sm text-brand-100 leading-relaxed max-w-3xl">기온(31.2℃)과 상대습도(68%)의 동반 상승으로 불쾌지수가 80 이상으로 급증하였습니다. 해당 시간대 전력 피크 완화를 위해 사전 예냉(Pre-cooling) 운전을 권장합니다.</p>
+								</div>
+								<button className="whitespace-nowrap bg-white text-brand-700 hover:bg-brand-50 px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition">상세 EDA 보기 →</button>
+							</div>
+						</div>
+					</div>
+				);
+			}
+
+			ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard />);
+		</script>
+	</body>
+</html>

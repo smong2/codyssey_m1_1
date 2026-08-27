@@ -1,189 +1,435 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>데이터 수집/정제</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head>
-<body class="bg-gray-50">
-  <div id="root"></div>
+<!doctype html>
+<html lang="ko" class="notranslate" translate="no">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="google" content="notranslate" />
+		<base href="/" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>기상 데이터 수집 및 조회</title>
 
-  <script type="text/babel">
-    const { useState } = React;
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+		<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+		<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+		<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
-    // ── 더미 데이터 (나중에 실제 API 응답으로 교체) ──
-    const MOCK_STATIONS = [
-      { id: "108", name: "서울" },
-      { id: "159", name: "부산" },
-      { id: "143", name: "대구" },
-      { id: "156", name: "광주" },
-      { id: "133", name: "대전" },
-    ];
+		<style>
+			body {
+				font-family:
+					"Pretendard",
+					-apple-system,
+					sans-serif;
+			}
+			::-webkit-scrollbar {
+				width: 6px;
+				height: 6px;
+			}
+			::-webkit-scrollbar-thumb {
+				background: #cbd5e1;
+				border-radius: 3px;
+			}
+		</style>
 
-    const MOCK_DATA = [
-      { time: "2024-01-01 00:00", temp: -3.2, humidity: 65, sunshine: 0.0, status: "정상" },
-      { time: "2024-01-01 01:00", temp: -4.1, humidity: 68, sunshine: 0.0, status: "정상" },
-      { time: "2024-01-01 02:00", temp: null, humidity: 70, sunshine: 0.0, status: "결측" },
-      { time: "2024-01-01 03:00", temp: -5.0, humidity: 72, sunshine: 0.0, status: "정상" },
-      { time: "2024-01-01 04:00", temp: 45.7, humidity: 71, sunshine: 0.0, status: "이상" },
-      { time: "2024-01-01 05:00", temp: -5.3, humidity: 73, sunshine: 0.0, status: "정상" },
-      { time: "2024-01-01 06:00", temp: -4.8, humidity: 70, sunshine: 0.1, status: "정상" },
-      { time: "2024-01-01 07:00", temp: -3.9, humidity: 67, sunshine: 0.5, status: "정상" },
-    ];
+		<script>
+			tailwind.config = { theme: { extend: { colors: { brand: { 50: "#eff6ff", 100: "#dbeafe", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" } } } } };
+		</script>
+	</head>
+	<body class="bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8 notranslate" translate="no">
+		<div id="root"></div>
 
-    function App() {
-      const [station, setStation] = useState("108");
-      const [startDate, setStartDate] = useState("2024-01-01");
-      const [endDate, setEndDate] = useState("2024-01-31");
-      const [loading, setLoading] = useState(false);
-      const [data, setData] = useState([]);
-      const [loaded, setLoaded] = useState(false);
+		<script type="text/babel">
+			const { useState, useEffect } = React;
 
-      // API 호출 시뮬레이션 (나중에 fetch로 교체)
-      const handleFetch = () => {
-        setLoading(true);
-        setLoaded(false);
-        setTimeout(() => {
-          setData(MOCK_DATA);
-          setLoading(false);
-          setLoaded(true);
-        }, 800);
-      };
+			// 인천(112) 추가 및 서울(108) 기본값 유지
+			const STATIONS = [
+				{ id: "108", name: "서울" },
+				{ id: "112", name: "인천" },
+				{ id: "159", name: "부산" },
+				{ id: "143", name: "대구" },
+				{ id: "156", name: "광주" },
+				{ id: "133", name: "대전" },
+			];
 
-      // 통계 계산
-      const total = data.length;
-      const missing = data.filter((d) => d.status === "결측").length;
-      const outlier = data.filter((d) => d.status === "이상").length;
-      const normal = total - missing - outlier;
+			function Icon({ name, className = "w-4 h-4" }) {
+				if (name === "download")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+						</svg>
+					);
+				if (name === "calendar")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2" />
+							<line x1="16" y1="2" x2="16" y2="6" strokeWidth="2" />
+							<line x1="8" y1="2" x2="8" y2="6" strokeWidth="2" />
+							<line x1="3" y1="10" x2="21" y2="10" strokeWidth="2" />
+						</svg>
+					);
+				if (name === "check")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+						</svg>
+					);
+				if (name === "info")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<circle cx="12" cy="12" r="10" strokeWidth="2" />
+							<line x1="12" y1="16" x2="12" y2="12" strokeWidth="2" />
+							<line x1="12" y1="8" x2="12.01" y2="8" strokeWidth="2" />
+						</svg>
+					);
+				return null;
+			}
 
-      const statusColor = (s) =>
-        s === "정상" ? "bg-green-100 text-green-700"
-        : s === "결측" ? "bg-yellow-100 text-yellow-700"
-        : "bg-red-100 text-red-700";
+			function DataCollectApp() {
+				const [tab, setTab] = useState("collect");
 
-      return (
-        <div className="max-w-5xl mx-auto p-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-1">데이터 수집 / 정제</h1>
-          <p className="text-gray-500 mb-6">기상청 ASOS 시간자료를 수집하고 품질을 진단합니다.</p>
+				const defaultDate = "2026-08-27";
+				const [station, setStation] = useState("108");
+				const [startDate, setStartDate] = useState(defaultDate);
+				const [endDate, setEndDate] = useState(defaultDate);
 
-          {/* ── 1단계: 수집 조건 설정 ── */}
-          <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              <span className="text-blue-500">1</span> 수집 조건 설정
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">관측소</label>
-                <select
-                  value={station}
-                  onChange={(e) => setStation(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                >
-                  {MOCK_STATIONS.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.id})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">시작일</label>
-                <input type="date" value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">종료일</label>
-                <input type="date" value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-              <div className="flex items-end">
-                <button onClick={handleFetch} disabled={loading}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-lg px-4 py-2 font-medium disabled:opacity-50">
-                  {loading ? "수집 중..." : "데이터 수집"}
-                </button>
-              </div>
-            </div>
-          </section>
+				const [loading, setLoading] = useState(false);
+				const [collectResult, setCollectResult] = useState(null);
+				const [error, setError] = useState(null);
 
-          {/* ── 2단계: 품질 요약 ── */}
-          {loaded && (
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <p className="text-sm text-gray-500">전체</p>
-                <p className="text-2xl font-bold text-gray-800">{total}</p>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <p className="text-sm text-gray-500">정상</p>
-                <p className="text-2xl font-bold text-green-600">{normal}</p>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <p className="text-sm text-gray-500">결측</p>
-                <p className="text-2xl font-bold text-yellow-600">{missing}</p>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <p className="text-sm text-gray-500">이상치</p>
-                <p className="text-2xl font-bold text-red-600">{outlier}</p>
-              </div>
-            </section>
-          )}
+				const [calYear, setCalYear] = useState(2026);
+				const [calMonth, setCalMonth] = useState(8);
+				const [calData, setCalData] = useState({});
+				const [selectedDate, setSelectedDate] = useState(null);
+				const [detailData, setDetailData] = useState({ hourly: [], daily: null });
 
-          {/* ── 3단계: 데이터 미리보기 ── */}
-          {loaded && (
-            <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-800">
-                  <span className="text-blue-500">2</span> 데이터 미리보기
-                </h2>
-                <button className="text-sm bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5">
-                  결측/이상치 정제
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-gray-500 text-left">
-                      <th className="py-2 px-3">시각</th>
-                      <th className="py-2 px-3">기온(℃)</th>
-                      <th className="py-2 px-3">습도(%)</th>
-                      <th className="py-2 px-3">일조(hr)</th>
-                      <th className="py-2 px-3">상태</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.map((row, i) => (
-                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-2 px-3">{row.time}</td>
-                        <td className="py-2 px-3">{row.temp ?? "—"}</td>
-                        <td className="py-2 px-3">{row.humidity}</td>
-                        <td className="py-2 px-3">{row.sunshine}</td>
-                        <td className="py-2 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(row.status)}`}>
-                            {row.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
+				const handleCollect = async () => {
+					setLoading(true);
+					setError(null);
+					setCollectResult(null);
+					try {
+						const res = await fetch("/api/weather/collect-all", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({ startDate, endDate, stn: station }),
+						});
+						if (!res.ok) throw new Error("수집 실패");
+						const data = await res.json();
+						setCollectResult(data);
 
-          {/* 초기 안내 */}
-          {!loaded && !loading && (
-            <div className="text-center text-gray-400 py-16">
-              조건을 설정하고 <b>데이터 수집</b> 버튼을 눌러주세요.
-            </div>
-          )}
-        </div>
-      );
-    }
+						if (tab === "view") fetchCalendarData(calYear, calMonth, station);
+					} catch (err) {
+						setError(err.message);
+					} finally {
+						setLoading(false);
+					}
+				};
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
-</body>
+				const fetchCalendarData = async (y, m, stn) => {
+					const ym = `${y}-${String(m).padStart(2, "0")}`;
+					try {
+						const res = await fetch(`/api/weather/calendar?stn=${stn}&year_month=${ym}`);
+						const data = await res.json();
+						setCalData(data);
+					} catch (e) {
+						console.error(e);
+					}
+				};
+
+				const handleDayClick = async (dateStr) => {
+					if (!calData[dateStr]) return;
+					setSelectedDate(dateStr);
+					try {
+						const res = await fetch(`/api/weather/view?stn=${station}&date=${dateStr}`);
+						const data = await res.json();
+						setDetailData(data);
+					} catch (e) {
+						console.error(e);
+					}
+				};
+
+				// 탭 또는 날짜 변경 시 캘린더 자동 갱신
+				useEffect(() => {
+					if (tab === "view") fetchCalendarData(calYear, calMonth, station);
+				}, [tab, calYear, calMonth, station]);
+
+				const generateCalendar = () => {
+					const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+					const firstDay = new Date(calYear, calMonth - 1, 1).getDay();
+					const grid = [];
+					for (let i = 0; i < firstDay; i++) grid.push(null);
+					for (let i = 1; i <= daysInMonth; i++) {
+						grid.push(`${calYear}-${String(calMonth).padStart(2, "0")}-${String(i).padStart(2, "0")}`);
+					}
+					return grid;
+				};
+
+				// ─── 공통 테이블 렌더러 (구간별 배경색 분리 적용) ───
+				const renderDataTable = (dataArray) => {
+					if (!dataArray || dataArray.length === 0) return null;
+					return (
+						<div className="overflow-x-auto max-h-96 border border-slate-200 rounded-xl mt-4 shadow-sm">
+							<table className="w-full text-[11px] sm:text-xs text-center border-collapse">
+								<thead className="sticky top-0 z-10 shadow-sm">
+									<tr>
+										<th colSpan="4" className="py-2 px-2 bg-slate-100 border-b border-r border-slate-200 text-slate-700 font-bold">
+											수집 원천 데이터
+										</th>
+										<th colSpan="2" className="py-2 px-2 bg-amber-50 border-b border-r border-amber-200 text-amber-800 font-bold">
+											품질 및 정제
+										</th>
+										<th colSpan="4" className="py-2 px-2 bg-brand-50 border-b border-brand-200 text-brand-800 font-bold">
+											가공 파생 지표
+										</th>
+									</tr>
+									<tr className="bg-white text-slate-500">
+										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">시각</th>
+										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">기온(℃)</th>
+										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">습도(%)</th>
+										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">일조(hr)</th>
+
+										<th className="py-2 px-2 border-b border-r border-amber-100 bg-amber-50/50">판정</th>
+										<th className="py-2 px-2 border-b border-r border-amber-100 bg-amber-50/50">조치내용</th>
+
+										<th className="py-2 px-2 border-b border-r border-brand-100 bg-brand-50/50">냉방도일(CDD)</th>
+										<th className="py-2 px-2 border-b border-r border-brand-100 bg-brand-50/50">난방도일(HDD)</th>
+										<th className="py-2 px-2 border-b border-r border-brand-100 bg-brand-50/50">불쾌지수(DI)</th>
+										<th className="py-2 px-2 border-b border-brand-100 bg-brand-50/50">추정부하(kW)</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-slate-100 bg-white">
+									{dataArray.map((row, i) => {
+										const statusParts = (row.quality_status || "정상").split(" → ");
+										const origStatus = statusParts[0];
+										const action = statusParts[1] || "-";
+
+										return (
+											<tr key={i} className="hover:bg-slate-50 transition">
+												<td className="py-2 px-2 font-medium bg-slate-50/30 border-r border-slate-100">{row.tm.includes(" ") ? row.tm.split(" ")[1] : row.tm}</td>
+												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-100">{row.ta}</td>
+												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-100">{row.hm}</td>
+												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-200">{row.ss}</td>
+
+												<td className="py-2 px-2 border-r border-amber-50 bg-amber-50/10">
+													<span className={`font-bold ${origStatus === "결측" ? "text-rose-500" : origStatus === "이상" ? "text-amber-600" : "text-emerald-500"}`}>{origStatus}</span>
+												</td>
+												<td className="py-2 px-2 border-r border-amber-100 text-slate-500 bg-amber-50/10">{action}</td>
+
+												<td className="py-2 px-2 border-r border-brand-50 bg-brand-50/10 text-slate-600">{row.cdd}</td>
+												<td className="py-2 px-2 border-r border-brand-50 bg-brand-50/10 text-slate-600">{row.hdd}</td>
+												<td className="py-2 px-2 border-r border-brand-50 bg-brand-50/10 font-medium text-brand-600">{row.di}</td>
+												<td className="py-2 px-2 bg-brand-50/10 font-bold text-slate-800">{row.load_kw}</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					);
+				};
+
+				return (
+					<div className="max-w-6xl mx-auto space-y-6 pb-12">
+						{/* Header */}
+						<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+							<div>
+								<h1 className="text-xl font-bold text-slate-900">기상 관측 데이터 파이프라인</h1>
+								<p className="text-xs sm:text-sm text-slate-500 mt-1">스마트 캐싱 및 서버사이드 자동 정제를 지원합니다.</p>
+							</div>
+							<div className="flex bg-slate-100 p-1 rounded-xl">
+								<button onClick={() => setTab("collect")} className={`px-4 py-2 text-sm font-bold rounded-lg transition flex items-center gap-2 ${tab === "collect" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+									<Icon name="download" /> 수집 및 정제
+								</button>
+								<button onClick={() => setTab("view")} className={`px-4 py-2 text-sm font-bold rounded-lg transition flex items-center gap-2 ${tab === "view" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+									<Icon name="calendar" /> 달력 조회
+								</button>
+							</div>
+						</div>
+
+						{/* 1. 수집 탭 */}
+						{tab === "collect" && (
+							<div className="space-y-6 animate-fade-in">
+								<section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+									<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+										<div>
+											<label className="block text-xs font-semibold text-slate-600 mb-1.5">관측소 (지역)</label>
+											<select value={station} onChange={(e) => setStation(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none">
+												{STATIONS.map((s) => (
+													<option key={s.id} value={s.id}>
+														{s.name} ({s.id})
+													</option>
+												))}
+											</select>
+										</div>
+										<div>
+											<label className="block text-xs font-semibold text-slate-600 mb-1.5">시작일자 (00시)</label>
+											<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+										</div>
+										<div>
+											<label className="block text-xs font-semibold text-slate-600 mb-1.5">종료일자 (24시)</label>
+											<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+										</div>
+										<div className="flex items-end">
+											<button type="button" onClick={handleCollect} disabled={loading} className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition disabled:opacity-50 flex items-center justify-center">
+												{loading ? (
+													<span className="inline-flex items-center gap-2">
+														<span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+														<span>일괄 수집 및 저장중...</span>
+													</span>
+												) : (
+													<span className="inline-flex items-center gap-2">
+														<Icon name="download" />
+														<span>전체 일괄 수집/저장</span>
+													</span>
+												)}
+											</button>
+										</div>
+									</div>
+								</section>
+
+								{error && <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm font-bold">{error}</div>}
+
+								{collectResult && (
+									<div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+										<div className="flex items-center justify-between mb-4">
+											<h3 className="font-bold text-slate-900 text-lg">수집 및 파생지표 연산 결과</h3>
+											<div className="text-sm bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg border border-emerald-200">
+												실제 API 호출 구간:{" "}
+												{collectResult.api_called ? (
+													<b>
+														{collectResult.shrink_range[0]} ~ {collectResult.shrink_range[1]}
+													</b>
+												) : (
+													<b>전구간 캐시 Hit (호출없음)</b>
+												)}
+											</div>
+										</div>
+										{renderDataTable(collectResult.hourly_data)}
+									</div>
+								)}
+							</div>
+						)}
+
+						{/* 2. 달력 뷰 탭 */}
+						{tab === "view" && (
+							<div className="space-y-6 animate-fade-in">
+								<section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+									<div className="flex justify-between items-center mb-6">
+										<div className="flex gap-4 items-center">
+											<select value={station} onChange={(e) => setStation(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold focus:ring-2 outline-none">
+												{STATIONS.map((s) => (
+													<option key={s.id} value={s.id}>
+														{s.name} ({s.id})
+													</option>
+												))}
+											</select>
+											<div className="flex items-center gap-3 bg-slate-50 rounded-xl px-2 py-1 border border-slate-100">
+												<button
+													onClick={() => {
+														let nm = calMonth - 1;
+														if (nm < 1) {
+															setCalMonth(12);
+															setCalYear(calYear - 1);
+														} else setCalMonth(nm);
+													}}
+													className="p-1 hover:bg-white rounded-lg text-slate-500 font-bold transition"
+												>
+													&lt;
+												</button>
+												<h2 className="text-base font-bold text-slate-900 w-24 text-center">
+													{calYear}년 {calMonth}월
+												</h2>
+												<button
+													onClick={() => {
+														let nm = calMonth + 1;
+														if (nm > 12) {
+															setCalMonth(1);
+															setCalYear(calYear + 1);
+														} else setCalMonth(nm);
+													}}
+													className="p-1 hover:bg-white rounded-lg text-slate-500 font-bold transition"
+												>
+													&gt;
+												</button>
+											</div>
+										</div>
+										<div className="text-xs text-slate-500 flex gap-4 bg-slate-50 px-3 py-1.5 rounded-lg">
+											<span className="flex items-center gap-1">
+												<Icon name="check" className="w-3.5 h-3.5 text-emerald-500" /> 완비 (24h)
+											</span>
+											<span className="flex items-center gap-1">
+												<div className="w-2 h-2 rounded-full bg-amber-500"></div> 부분 수집
+											</span>
+										</div>
+									</div>
+
+									<div className="grid grid-cols-7 gap-2">
+										{["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+											<div key={d} className="text-center text-xs font-bold text-slate-400 pb-2">
+												{d}
+											</div>
+										))}
+										{generateCalendar().map((dateStr, idx) => {
+											if (!dateStr) return <div key={idx} className="h-12"></div>;
+											const dayNum = dateStr.split("-")[2].replace(/^0/, "");
+											const cnt = calData[dateStr] || 0;
+											const isSelected = selectedDate === dateStr;
+
+											return (
+												<div key={dateStr} onClick={() => handleDayClick(dateStr)} className={`relative group h-14 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition ${cnt === 0 ? "border-transparent bg-slate-50 hover:bg-slate-100 text-slate-400" : isSelected ? "border-brand-500 bg-brand-50 ring-2 ring-brand-100 shadow-sm" : "border-slate-200 hover:border-brand-300"}`}>
+													<span className={`text-sm font-semibold ${cnt > 0 ? "text-slate-700" : ""}`}>{dayNum}</span>
+													{cnt === 24 && <Icon name="check" className="w-4 h-4 text-emerald-500 mt-0.5" />}
+													{cnt > 0 && cnt < 24 && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1"></div>}
+
+													{cnt > 0 && cnt < 24 && (
+														<div className="absolute bottom-full mb-2 hidden group-hover:block w-max bg-slate-800 text-white text-[11px] px-2 py-1 rounded shadow-lg z-10">
+															{cnt}/24 시간 수집됨
+															<div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+														</div>
+													)}
+												</div>
+											);
+										})}
+									</div>
+								</section>
+
+								{selectedDate && detailData.hourly.length > 0 && (
+									<section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 animate-fade-in">
+										<h3 className="font-bold text-slate-900 mb-4">
+											{selectedDate} ({STATIONS.find((s) => s.id === station)?.name}) 기후 및 시간 상세
+										</h3>
+
+										{detailData.daily && (
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 bg-slate-50 border border-slate-100 p-4 rounded-xl">
+												<div>
+													<p className="text-xs text-slate-500 mb-0.5">일 평균 기온</p>
+													<p className="font-bold text-lg">{detailData.daily.ta_avg}℃</p>
+												</div>
+												<div>
+													<p className="text-xs text-slate-500 mb-0.5">최고 / 최저 기온</p>
+													<p className="font-bold text-lg text-rose-600">
+														{detailData.daily.ta_max}℃ <span className="text-slate-300 font-normal">/</span> <span className="text-blue-600">{detailData.daily.ta_min}℃</span>
+													</p>
+												</div>
+												<div>
+													<p className="text-xs text-slate-500 mb-0.5">일조 합계</p>
+													<p className="font-bold text-lg">{detailData.daily.ss_sum} hr</p>
+												</div>
+												<div>
+													<p className="text-xs text-slate-500 mb-0.5">일 평균 습도</p>
+													<p className="font-bold text-lg">{detailData.daily.rhm_avg}%</p>
+												</div>
+											</div>
+										)}
+
+										{renderDataTable(detailData.hourly)}
+									</section>
+								)}
+							</div>
+						)}
+					</div>
+				);
+			}
+
+			ReactDOM.createRoot(document.getElementById("root")).render(<DataCollectApp />);
+		</script>
+	</body>
 </html>
