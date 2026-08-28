@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 router = APIRouter()
 
-@router.get("/dashboard-stats")
+@router.get("/dashboard")
 async def get_dashboard_stats(stn: str = "108"):
     conn = get_connection()
     cursor = conn.cursor()
