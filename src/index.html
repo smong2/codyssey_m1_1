@@ -9,6 +9,7 @@
 		<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 		<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 		<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 		<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
@@ -32,12 +33,16 @@
 		<script>
 			tailwind.config = { theme: { extend: { colors: { brand: { 50: "#eff6ff", 100: "#dbeafe", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" } } } } };
 		</script>
+
+		<!-- 💡 분리된 GNB 컴포넌트를 최우선으로 불러옵니다 -->
+		<script type="text/babel" src="/gnb.js"></script>
 	</head>
 	<body class="bg-slate-50 text-slate-800 notranslate" translate="no">
 		<div id="root"></div>
 
 		<script type="text/babel">
-			const { useState, useEffect } = React;
+			const { useState, useEffect, useRef } = React;
+			const { GNB } = window; // GNB 컴포넌트 연결
 
 			const STATIONS = [
 				{ id: "108", name: "서울" },
@@ -53,12 +58,6 @@
 					return (
 						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-						</svg>
-					);
-				if (name === "activity")
-					return (
-						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
 						</svg>
 					);
 				if (name === "check-circle")
@@ -87,6 +86,10 @@
 				const [stats, setStats] = useState(null);
 				const [loading, setLoading] = useState(true);
 
+				const stationChartRef = useRef(null);
+				const chartInstance = useRef(null);
+
+				// 데이터 패치
 				useEffect(() => {
 					setLoading(true);
 					fetch(`/api/weather/dashboard?stn=${station}`)
@@ -101,38 +104,45 @@
 						});
 				}, [station]);
 
+				// 가로형 막대그래프 렌더링
+				useEffect(() => {
+					if (!stats || !stationChartRef.current) return;
+					if (chartInstance.current) chartInstance.current.destroy();
+
+					const labels = STATIONS.map((s) => s.name);
+					const data = STATIONS.map((s) => {
+						const st = stats.stations_status.find((x) => x.stn_id === s.id);
+						return st ? st.count : 0;
+					});
+
+					chartInstance.current = new Chart(stationChartRef.current, {
+						type: "bar",
+						data: {
+							labels: labels,
+							datasets: [
+								{
+									label: "누적 데이터 수집량 (시간)",
+									data: data,
+									backgroundColor: "rgba(59, 130, 246, 0.8)",
+									borderRadius: 4,
+								},
+							],
+						},
+						options: {
+							responsive: true,
+							maintainAspectRatio: false,
+							indexAxis: "y", // 가로형 그래프로 변경
+							plugins: { legend: { display: false } },
+							scales: { x: { title: { display: true, text: "누적 수집 건수 (시간)" } } },
+						},
+					});
+				}, [stats]);
+
 				return (
 					<div className="min-h-screen flex flex-col">
-						{/* GNB */}
-						<nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-							<div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-								<div className="flex justify-between items-center h-14">
-									<div className="flex items-center gap-8">
-										<span className="text-lg font-black text-brand-600 tracking-tight">WeatherLoad</span>
-										<div className="hidden sm:flex space-x-6">
-											<a href="/" className="text-brand-600 border-brand-600 px-1 py-4 border-b-2 text-sm font-bold transition">
-												홈 (대시보드)
-											</a>
-											<a href="/data.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
-												1. 데이터 수집
-											</a>
-											<a href="/eda.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
-												2. 탐색적 분석(EDA)
-											</a>
-											<a href="/predict.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
-												3. 시계열 예측
-											</a>
-											<a href="/report.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
-												4. 종합 리포트
-											</a>
-										</div>
-									</div>
-								</div>
-							</div>
-						</nav>
+						<GNB />
 
 						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-							{/* 상단 타이틀 및 관측소 선택 */}
 							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 								<div>
 									<h1 className="text-xl font-bold text-slate-900">기상 데이터 및 에너지 부하 운영 대시보드</h1>
@@ -150,12 +160,11 @@
 								</div>
 							</div>
 
-							{/* 스마트 폴백 상태 배너 (오늘 데이터 없을 때 안내) */}
 							{stats && stats.is_fallback && (
 								<div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-900 animate-fade-in">
 									<Icon name="alert-circle" className="w-5 h-5 text-amber-600 flex-shrink-0" />
 									<div className="text-xs sm:text-sm">
-										<b>실시간 집계 대기 중 안내:</b> 오늘({stats.today_str}) 실시간 기상 데이터가 아직 모두 집계되지 않아, 가장 최근 데이터가 완비된 <b>[{stats.active_date}]</b> 기준으로 대시보드 요약 정보를 대체하여 표시합니다.
+										<b>실시간 집계 대기 중 안내:</b> 오늘({stats.today_str}) 실시간 데이터가 아직 모두 집계되지 않아, 데이터가 완비된 <b>[{stats.active_date}]</b> 기준으로 대시보드 요약 정보를 표시합니다.
 									</div>
 								</div>
 							)}
@@ -165,7 +174,7 @@
 							) : (
 								stats && (
 									<div className="space-y-6 animate-fade-in">
-										{/* 1. 수집 통계 및 실적 요약 KPI 카드 */}
+										{/* KPI 카드 */}
 										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-brand-500">
 												<span className="text-xs font-medium text-slate-500">오늘 실시간 수집 현황</span>
@@ -204,7 +213,7 @@
 											</div>
 										</div>
 
-										{/* 2. 빠른 메뉴 이동 카드 */}
+										{/* 메뉴 이동 카드 */}
 										<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 											<a href="/data.html" className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:border-brand-300 hover:shadow-md transition group flex flex-col justify-between">
 												<div>
@@ -232,7 +241,7 @@
 												<div>
 													<div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-4">03</div>
 													<h3 className="font-bold text-slate-900 text-lg group-hover:text-amber-600 transition">시계열 부하 예측</h3>
-													<p className="text-xs text-slate-500 mt-1 leading-relaxed">Prophet, SARIMA 모델 기반 백테스팅 수행 및 향후 24h~7d 미래 피크 부하 예측</p>
+													<p className="text-xs text-slate-500 mt-1 leading-relaxed">예측 모델(Prophet 등) 기반 성능 백테스팅 및 향후 24h~7d 미래 부하 시뮬레이션</p>
 												</div>
 												<div className="mt-6 flex items-center gap-1 text-xs font-bold text-amber-600">
 													예측 모델로 이동 <Icon name="arrow-right" className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
@@ -240,35 +249,13 @@
 											</a>
 										</div>
 
-										{/* 3. 관측소별 파이프라인 수집 상태 요약 테이블 */}
+										{/* 차트 렌더링 영역 */}
 										<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
 											<h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-												<Icon name="database" className="text-slate-500" /> 전국 주요 관측소 데이터 적재 현황
+												<Icon name="database" className="text-slate-500 w-5 h-5" /> 전국 주요 관측소 데이터 적재 현황
 											</h3>
-											<div className="overflow-x-auto border border-slate-200 rounded-xl">
-												<table className="w-full text-xs text-center border-collapse">
-													<thead className="bg-slate-100 text-slate-600 font-bold">
-														<tr>
-															<th className="py-2.5 px-3 border-b border-r border-slate-200">관측소 ID</th>
-															<th className="py-2.5 px-3 border-b border-r border-slate-200">지역명</th>
-															<th className="py-2.5 px-3 border-b border-r border-slate-200">최근 수집 시각</th>
-															<th className="py-2.5 px-3 border-b border-slate-200">누적 수집 건수</th>
-														</tr>
-													</thead>
-													<tbody className="divide-y divide-slate-100">
-														{STATIONS.map((s) => {
-															const stat = stats.stations_status.find((x) => x.stn_id === s.id);
-															return (
-																<tr key={s.id} className="hover:bg-slate-50 transition">
-																	<td className="py-2.5 px-3 border-r border-slate-100 font-mono font-bold text-slate-700">{s.id}</td>
-																	<td className="py-2.5 px-3 border-r border-slate-100 font-bold">{s.name}</td>
-																	<td className="py-2.5 px-3 border-r border-slate-100 text-slate-600">{stat ? stat.last_tm : "데이터 없음"}</td>
-																	<td className="py-2.5 px-3 font-semibold text-brand-600">{stat ? `${stat.count.toLocaleString()} 시간` : "0 시간"}</td>
-																</tr>
-															);
-														})}
-													</tbody>
-												</table>
+											<div className="h-64 w-full relative">
+												<canvas ref={stationChartRef}></canvas>
 											</div>
 										</div>
 									</div>
