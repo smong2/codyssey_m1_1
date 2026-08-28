@@ -80,3 +80,8 @@ docker compose -f docker/docker-compose.yml up -d --build
 3. **탐색적 분석 (EDA):** 기온-전력 상관관계 산점도 및 CDD/HDD 누적 바 차트 분석
 4. **시계열 예측 (Forecast):** Prophet 모델 기반 백테스팅, 시계열 분해 및 잔차 해석
 5. **종합 리포트:** 선택 조건 기반 Markdown 변환 및 PDF 출력
+
+## 4. 차트 예시
+
+1. 예측 <img src="./assets/forecast_ts.png" width="100%"/>
+2. EDA <img src="./assets/eda_ts_pattern.png" width="100%"/>
