@@ -5,6 +5,8 @@
 		<meta name="google" content="notranslate" />
 		<base href="/" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+		<meta http-equiv="Pragma" content="no-cache" />
 		<title>기상 데이터 수집 및 조회</title>
 
 		<script src="https://cdn.tailwindcss.com"></script>
@@ -40,7 +42,6 @@
 		<script type="text/babel">
 			const { useState, useEffect } = React;
 
-			// 인천(112) 추가 및 서울(108) 기본값 유지
 			const STATIONS = [
 				{ id: "108", name: "서울" },
 				{ id: "112", name: "인천" },
@@ -80,26 +81,65 @@
 							<line x1="12" y1="8" x2="12.01" y2="8" strokeWidth="2" />
 						</svg>
 					);
+				if (name === "bar-chart")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 20V10M12 20V4M6 20v-6" />
+						</svg>
+					);
+				if (name === "chevron-down")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+						</svg>
+					);
+				if (name === "chevron-up")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" />
+						</svg>
+					);
 				return null;
 			}
 
 			function DataCollectApp() {
 				const [tab, setTab] = useState("collect");
 
-				const defaultDate = "2026-08-27";
+				// kst 기준으로 오늘 날짜를 기본값으로 설정
+				const kstOffset = 9 * 60; // KST is UTC+9
+				const now = new Date();
+				const kstNow = new Date(now.getTime() + kstOffset * 60 * 1000);
+				const defaultDate = kstNow.toISOString().split("T")[0]; // YYYY-MM-DD 만 추출
+
 				const [station, setStation] = useState("108");
 				const [startDate, setStartDate] = useState(defaultDate);
 				const [endDate, setEndDate] = useState(defaultDate);
+
+				// 가이드 아코디언 상태
+				const [isGuideOpen, setIsGuideOpen] = useState(false);
 
 				const [loading, setLoading] = useState(false);
 				const [collectResult, setCollectResult] = useState(null);
 				const [error, setError] = useState(null);
 
-				const [calYear, setCalYear] = useState(2026);
-				const [calMonth, setCalMonth] = useState(8);
+				const [calYear, setCalYear] = useState(kstNow.getFullYear());
+				const [calMonth, setCalMonth] = useState(kstNow.getMonth() + 1);
 				const [calData, setCalData] = useState({});
 				const [selectedDate, setSelectedDate] = useState(null);
 				const [detailData, setDetailData] = useState({ hourly: [], daily: null });
+
+				// ─── 날짜 동기화 및 역전 방지 ───
+				const handleStartChange = (e) => {
+					const newStart = e.target.value;
+					setStartDate(newStart);
+					if (endDate < newStart) setEndDate(newStart);
+				};
+
+				const handleEndChange = (e) => {
+					const newEnd = e.target.value;
+					setEndDate(newEnd);
+					if (newEnd < startDate) setStartDate(newEnd);
+				};
 
 				const handleCollect = async () => {
 					setLoading(true);
@@ -146,7 +186,6 @@
 					}
 				};
 
-				// 탭 또는 날짜 변경 시 캘린더 자동 갱신
 				useEffect(() => {
 					if (tab === "view") fetchCalendarData(calYear, calMonth, station);
 				}, [tab, calYear, calMonth, station]);
@@ -162,32 +201,31 @@
 					return grid;
 				};
 
-				// ─── 공통 테이블 렌더러 (구간별 배경색 분리 적용) ───
+				// ─── 공통 테이블 렌더러 ───
 				const renderDataTable = (dataArray) => {
 					if (!dataArray || dataArray.length === 0) return null;
 					return (
-						<div className="overflow-x-auto max-h-96 border border-slate-200 rounded-xl mt-4 shadow-sm">
+						<div className="overflow-x-auto max-h-[500px] border border-slate-200 rounded-xl mt-4 shadow-sm">
 							<table className="w-full text-[11px] sm:text-xs text-center border-collapse">
 								<thead className="sticky top-0 z-10 shadow-sm">
 									<tr>
-										<th colSpan="4" className="py-2 px-2 bg-slate-100 border-b border-r border-slate-200 text-slate-700 font-bold">
+										<th colSpan="4" className="py-2.5 px-2 bg-slate-100 border-b border-r border-slate-200 text-slate-700 font-bold">
 											수집 원천 데이터
 										</th>
-										<th colSpan="2" className="py-2 px-2 bg-amber-50 border-b border-r border-amber-200 text-amber-800 font-bold">
-											품질 및 정제
+										<th colSpan="1" className="py-2.5 px-2 bg-amber-50 border-b border-r border-amber-200 text-amber-900 font-bold">
+											데이터 정제 및 조치 이력 (Audit Trail)
 										</th>
-										<th colSpan="4" className="py-2 px-2 bg-brand-50 border-b border-brand-200 text-brand-800 font-bold">
+										<th colSpan="4" className="py-2.5 px-2 bg-brand-50 border-b border-brand-200 text-brand-900 font-bold">
 											가공 파생 지표
 										</th>
 									</tr>
 									<tr className="bg-white text-slate-500">
-										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">시각</th>
+										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50 min-w-[50px]">일시</th>
 										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">기온(℃)</th>
 										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">습도(%)</th>
 										<th className="py-2 px-2 border-b border-r border-slate-200 bg-slate-50">일조(hr)</th>
 
-										<th className="py-2 px-2 border-b border-r border-amber-100 bg-amber-50/50">판정</th>
-										<th className="py-2 px-2 border-b border-r border-amber-100 bg-amber-50/50">조치내용</th>
+										<th className="py-2 px-3 border-b border-r border-amber-100 bg-amber-50/50 text-left">세부 판정 및 사유 (Traceability)</th>
 
 										<th className="py-2 px-2 border-b border-r border-brand-100 bg-brand-50/50">냉방도일(CDD)</th>
 										<th className="py-2 px-2 border-b border-r border-brand-100 bg-brand-50/50">난방도일(HDD)</th>
@@ -197,21 +235,32 @@
 								</thead>
 								<tbody className="divide-y divide-slate-100 bg-white">
 									{dataArray.map((row, i) => {
-										const statusParts = (row.quality_status || "정상").split(" → ");
-										const origStatus = statusParts[0];
-										const action = statusParts[1] || "-";
+										const isCleaned = row.quality_status && row.quality_status !== "정상 수집";
+
+										// 날짜와 시간을 위아래로 컴팩트하게 분리 (예: "08-24", "13:00")
+										let datePart = "";
+										let timePart = row.tm;
+										if (row.tm.includes(" ")) {
+											const parts = row.tm.split(" ");
+											datePart = parts[0].substring(5); // MM-DD
+											timePart = parts[1].substring(0, 5); // HH:MM
+										}
 
 										return (
 											<tr key={i} className="hover:bg-slate-50 transition">
-												<td className="py-2 px-2 font-medium bg-slate-50/30 border-r border-slate-100">{row.tm.includes(" ") ? row.tm.split(" ")[1] : row.tm}</td>
-												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-100">{row.ta}</td>
+												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-100 align-middle">
+													<div className="flex flex-col leading-tight">
+														{datePart && <span className="text-[10px] text-slate-400">{datePart}</span>}
+														<span className="font-bold text-slate-700">{timePart}</span>
+													</div>
+												</td>
+												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-100 font-medium">{row.ta}</td>
 												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-100">{row.hm}</td>
 												<td className="py-2 px-2 bg-slate-50/30 border-r border-slate-200">{row.ss}</td>
 
-												<td className="py-2 px-2 border-r border-amber-50 bg-amber-50/10">
-													<span className={`font-bold ${origStatus === "결측" ? "text-rose-500" : origStatus === "이상" ? "text-amber-600" : "text-emerald-500"}`}>{origStatus}</span>
+												<td className="py-2 px-3 border-r border-amber-100 text-left bg-amber-50/20">
+													<span className={`inline-block px-2 py-0.5 rounded font-semibold text-[11px] ${isCleaned ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{row.quality_status || "정상 수집"}</span>
 												</td>
-												<td className="py-2 px-2 border-r border-amber-100 text-slate-500 bg-amber-50/10">{action}</td>
 
 												<td className="py-2 px-2 border-r border-brand-50 bg-brand-50/10 text-slate-600">{row.cdd}</td>
 												<td className="py-2 px-2 border-r border-brand-50 bg-brand-50/10 text-slate-600">{row.hdd}</td>
@@ -232,7 +281,7 @@
 						<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 							<div>
 								<h1 className="text-xl font-bold text-slate-900">기상 관측 데이터 파이프라인</h1>
-								<p className="text-xs sm:text-sm text-slate-500 mt-1">스마트 캐싱 및 서버사이드 자동 정제를 지원합니다.</p>
+								<p className="text-xs sm:text-sm text-slate-500 mt-1">스마트 캐싱 및 서버사이드 자동 정제(Audit Trail)를 지원합니다.</p>
 							</div>
 							<div className="flex bg-slate-100 p-1 rounded-xl">
 								<button onClick={() => setTab("collect")} className={`px-4 py-2 text-sm font-bold rounded-lg transition flex items-center gap-2 ${tab === "collect" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
@@ -247,6 +296,39 @@
 						{/* 1. 수집 탭 */}
 						{tab === "collect" && (
 							<div className="space-y-6 animate-fade-in">
+								{/* 정제 가이드 아코디언 */}
+								<div className="bg-slate-800 text-white rounded-2xl shadow-sm overflow-hidden border border-slate-700 transition-all">
+									<button type="button" onClick={() => setIsGuideOpen(!isGuideOpen)} className="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-slate-700 transition-colors">
+										<span className="font-bold text-sm text-slate-200 flex items-center gap-2">
+											<Icon name="info" className="text-amber-400 w-5 h-5" />
+											데이터 결측치 및 이상치 자동 보정(정제) 가이드
+										</span>
+										<Icon name={isGuideOpen ? "chevron-up" : "chevron-down"} className="text-slate-400 w-5 h-5" />
+									</button>
+
+									{isGuideOpen && (
+										<div className="px-4 sm:px-5 pb-5 pt-2 border-t border-slate-700 text-[13px] text-slate-300 space-y-3 bg-slate-800 animate-fade-in leading-relaxed">
+											<p>
+												본 시스템은 기상청 API 수집 단계에서 결측 및 이상 데이터를 감지하여 아래 규칙에 따라 <b>서버 사이드에서 자동으로 보정(정제)</b>합니다.
+											</p>
+											<ul className="list-disc list-inside space-y-2 ml-1 text-slate-200">
+												<li>
+													<span className="font-bold text-emerald-400">기온(TA) 및 습도(HM) 결측:</span> 결측 발생 시 <b>직전 시간의 정상 관측값으로 대치(Forward Fill)</b>하여 시계열 단절을 방지합니다.
+												</li>
+												<li>
+													<span className="font-bold text-emerald-400">기온/습도 이상치(Outlier):</span> 물리적 한계(기온 -35~45℃, 습도 0~100%)를 벗어난 데이터는 해당 <b>최대/최소 임계값으로 캡핑(Winsorizing)</b> 처리합니다.
+												</li>
+												<li>
+													<span className="font-bold text-amber-400">일조(SS) 특수코드 및 결측:</span> 야간이나 미관측 시 발생하는 <b>-9 코드 또는 결측값(NaN)</b>은 실제 일조가 없는 상태이므로 <b>0.0으로 일괄 변환</b>하여 에너지 부하 계산의 오류를 방지합니다.
+												</li>
+												<li>
+													<span className="font-bold text-emerald-400">풍속(WS) 결측:</span> 체감온도 계산 등에 필요한 풍속 결측 시 바람이 없는 상태인 <b>0.0</b>으로 일괄 처리합니다.
+												</li>
+											</ul>
+										</div>
+									)}
+								</div>
+
 								<section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
 									<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
 										<div>
@@ -261,23 +343,23 @@
 										</div>
 										<div>
 											<label className="block text-xs font-semibold text-slate-600 mb-1.5">시작일자 (00시)</label>
-											<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+											<input type="date" value={startDate} onChange={handleStartChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
 										</div>
 										<div>
 											<label className="block text-xs font-semibold text-slate-600 mb-1.5">종료일자 (24시)</label>
-											<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+											<input type="date" value={endDate} onChange={handleEndChange} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
 										</div>
 										<div className="flex items-end">
 											<button type="button" onClick={handleCollect} disabled={loading} className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-4 py-2.5 text-sm font-bold shadow-sm transition disabled:opacity-50 flex items-center justify-center">
 												{loading ? (
 													<span className="inline-flex items-center gap-2">
 														<span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-														<span>일괄 수집 및 저장중...</span>
+														<span>수집 및 정제중...</span>
 													</span>
 												) : (
 													<span className="inline-flex items-center gap-2">
 														<Icon name="download" />
-														<span>전체 일괄 수집/저장</span>
+														<span>수집 및 자동정제 실행</span>
 													</span>
 												)}
 											</button>
@@ -289,9 +371,9 @@
 
 								{collectResult && (
 									<div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-										<div className="flex items-center justify-between mb-4">
-											<h3 className="font-bold text-slate-900 text-lg">수집 및 파생지표 연산 결과</h3>
-											<div className="text-sm bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg border border-emerald-200">
+										<div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+											<h3 className="font-bold text-slate-900 text-lg">수집 및 데이터 정제 이력 (Audit Trail) 결과</h3>
+											<div className="text-xs bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-200">
 												실제 API 호출 구간:{" "}
 												{collectResult.api_called ? (
 													<b>
@@ -302,6 +384,9 @@
 												)}
 											</div>
 										</div>
+										<p className="text-xs text-slate-500 mb-2">
+											※ 아래 테이블의 <b>'세부 판정 및 사유'</b> 열에서 -9 특수코드 보정 및 결측치 전방 대치 등의 정제 이력을 직접 확인할 수 있습니다.
+										</p>
 										{renderDataTable(collectResult.hourly_data)}
 									</div>
 								)}

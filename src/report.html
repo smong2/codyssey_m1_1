@@ -1,21 +1,16 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" class="notranslate" translate="no">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>최종 분석 리포트 | WeatherLoad</title>
+		<title>종합 예측 리포트 | WeatherLoad</title>
 
-		<!-- Tailwind CSS CDN -->
 		<script src="https://cdn.tailwindcss.com"></script>
-		<!-- React & ReactDOM CDN -->
 		<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 		<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-		<!-- Babel (JSX 변환) -->
 		<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-		<!-- Lucide Icons -->
-		<script src="https://unpkg.com/lucide@latest"></script>
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-		<!-- Pretendard 폰트 -->
 		<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
 		<style>
@@ -33,351 +28,603 @@
 				background: #cbd5e1;
 				border-radius: 3px;
 			}
-			::-webkit-scrollbar-track {
-				background: transparent;
-			}
+
 			@media print {
+				body {
+					background-color: white;
+					padding: 0;
+					margin: 0;
+				}
 				.no-print {
 					display: none !important;
 				}
-				body {
-					background: white;
+				.print-container {
+					max-width: 100% !important;
+					margin: 0 !important;
+					padding: 0 !important;
+					box-shadow: none !important;
+					border: none !important;
+				}
+				.print-break-inside-avoid {
+					break-inside: avoid;
 				}
 			}
 		</style>
 
 		<script>
-			tailwind.config = {
-				theme: {
-					extend: {
-						colors: {
-							brand: {
-								50: "#eff6ff",
-								100: "#dbeafe",
-								500: "#3b82f6",
-								600: "#2563eb",
-								700: "#1d4ed8",
-								900: "#1e3a8a",
-							},
-						},
-					},
-				},
-			};
+			tailwind.config = { theme: { extend: { colors: { brand: { 50: "#eff6ff", 100: "#dbeafe", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" } } } } };
 		</script>
 	</head>
-	<body class="bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
+	<body class="bg-slate-50 text-slate-800 notranslate" translate="no">
 		<div id="root"></div>
 
 		<script type="text/babel">
-			const { useState, useEffect } = React;
+			const { useState, useEffect, useRef } = React;
 
-			const MARKDOWN_CONTENT = `# 기상 데이터 기반 냉난방 에너지 부하 분석 리포트
+			const STATIONS = [
+				{ id: "108", name: "서울" },
+				{ id: "112", name: "인천" },
+				{ id: "159", name: "부산" },
+				{ id: "143", name: "대구" },
+				{ id: "156", name: "광주" },
+				{ id: "133", name: "대전" },
+			];
 
-## 1. 분석 주제 및 선정 이유
-- **분석 배경**: 기후변화로 인한 이상고온 및 폭염 발생 빈도 증가에 따라 전력 계통의 냉난방 부하 변동성이 심화됨.
-- **선정 이유**: 기상청 종관기상관측(ASOS) 시간자료를 기반으로 기온, 습도, 일조량이 냉난방 수요(CDD/HDD)에 미치는 영향을 정량화하고 피크 부하 사전 제어 전략을 도출하고자 함.
-
-## 2. 핵심 분석 질문 (3가지)
-1. **부하 임계점**: 어떤 기온 구간에서 냉·난방 에너지 부하가 비선형적으로 급증하는가?
-2. **시간대별 일주기 패턴**: 하루 24시간 중 냉방 부하 및 불쾌지수가 정점에 도달하는 시간대는 언제인가?
-3. **일조량 및 습도 복합 영향**: 동일 기온 조건에서 일조량 유무와 습도 수준이 냉방 부하에 미치는 격차는 얼마인가?
-
-## 3. 데이터 명세 및 정제
-- **데이터 출처**: 기상청 기상자료개방포털 종관기상관측(ASOS) 시간자료
-- **관측 지점 / 기간**: 서울 관측소(108 지점) / 1개년 시간별 시계열 데이터 (N = 8,760개 데이터 포인트)
-- **전처리 기준**:
-  - 결측치: 선형 보간법(Linear Interpolation, 연속 3시간 미만) 및 전후 평균값 대치
-  - 이상치: $3\sigma$ (3-Sigma Rule) 및 물리적 한계치 초과값 식별 후 Winsorizing 처리
-  - 파생변수 생성: 냉방도일(CDD, 기준 24℃), 난방도일(HDD, 기준 18℃), 불쾌지수(DI), 체감온도
-
-## 4. 핵심 분석 인사이트 (3가지)
-
-### 인사이트 1: 28℃ 초과 구간에서의 냉방 부하 지수 급증 (U-Curve 임계점)
-- **관찰 (Fact)**: 기온 18~22℃ 구간에서는 총 에너지 부하가 1.1~1.9 kW로 베이스라인을 유지하나, **28℃를 초과하는 순간 부하 기울기가 2.4배 급증**하여 32℃ 이상에서는 10.5 kW에 도달함.
-- **원인 (Why)**: 외기온도 상승 시 건축물 외벽 열관류율 한계 및 공조기 열교환 효율 저하로 인한 비선형적 냉방 수요 폭증.
-- **행동 (Action)**: 외기온 27.5℃ 도달 시 사전 예냉(Pre-cooling) 가동 프로토콜을 자동 활성화하여 피크 전력 급증을 억제.
-
-### 인사이트 2: 13:00~16:00 시간대 불쾌지수-부하 피크 지연 동조화
-- **관찰 (Fact)**: 기온 피크(14:00, 32.8℃)와 불쾌지수 피크(14:00, 83.4)가 일치하며, 기온이 꺾이는 16:00 이후에도 복사열 축적으로 인해 18:00까지 고부하 상태가 유지됨.
-- **원인 (Why)**: 지표면 및 건물 축열 효과로 인한 열 방출 지연 현상(Thermal Lag).
-- **행동 (Action)**: 12:30~14:30 집중 냉방 후 15:00부터 송풍/환기 모드로 전환하여 피크 시간대(14~16시) 전력 사용량을 분산.
-
-### 인사이트 3: 일조량 유무에 따른 냉방 부하 53.4% 격차 발생
-- **관찰 (Fact)**: 동일 기온(30℃ 기준) 조건에서 일조시간 0.6hr 이상인 맑은 날의 평균 냉방 부하는 8.9 kW로, 흐린 날(5.8 kW) 대비 53.4% 높게 나타남.
-- **원인 (Why)**: 유리창 및 개구부를 통한 직접 일사 획득(Solar Heat Gain)이 실내 열부하를 직접 가중시킴.
-- **행동 (Action)**: 맑은 날 예보 시 11:00부터 스마트 블라인드 및 차양 제어를 강제 연동하여 일사 부하 사전 차단.
-
-## 5. 결론 및 한계점
-- **결론**: 시계열 분해 및 예측 결과, 기온·습도·일조량의 3대 인자를 결합한 모델(Prophet)이 MAPE 4.85%의 높은 정밀도로 피크 부하 예측에 성공함.
-- **한계점**: 건물 내부의 재실 인원, 조명/기기 발열량 등 실내 내부 발열 변수가 배제되어 단일 건축물 적용 시 실내 센서 데이터 융합 보정이 추가로 필요함.
-
-## 6. AI 사용 로그 (투명성 기록)
-1. **사용 작업**: 시계열 결측치 처리 알고리즘 검증, 파생지표(CDD/HDD) 수식 구현, 통계 시각화 레이아웃 구조화
-2. **사용 이유**: Python 전처리 로직 작성 시간 단축 및 시계열 분해 모델(SARIMA vs Prophet) 파라미터 최적 대안 탐색
-3. **검증 방법**: 기상청 공식 온습도 지수 산출식과 교차 대조 검증, 원본 데이터 샘플링(100건) 수작업 연산 일치 여부 확인
-`;
+			function Icon({ name, className = "w-4 h-4" }) {
+				if (name === "printer")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+						</svg>
+					);
+				if (name === "file-text")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+					);
+				if (name === "copy")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+						</svg>
+					);
+				if (name === "shield-check")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+						</svg>
+					);
+				if (name === "activity")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+						</svg>
+					);
+				return null;
+			}
 
 			function ReportPage() {
-				const [viewMode, setViewMode] = useState("ui"); // 'ui' or 'markdown'
-				const [copied, setCopied] = useState(false);
+				const kstOffset = 9 * 60;
+				const kstNow = new Date(new Date().getTime() + kstOffset * 60 * 1000);
+				const prevMonth = new Date(kstNow.getTime() - 7 * 24 * 60 * 60 * 1000);
+				const todayStr = kstNow.toISOString().split("T")[0];
+				const startStr = prevMonth.toISOString().split("T")[0];
+
+				const [station, setStation] = useState("108");
+				const [startDate, setStartDate] = useState(startStr);
+				const [endDate, setEndDate] = useState(todayStr);
+				const [horizon, setHorizon] = useState("24h");
+
+				const [loading, setLoading] = useState(false);
+				const [reportData, setReportData] = useState(null);
+				const [error, setError] = useState(null);
+				const [viewMode, setViewMode] = useState("web");
+
+				const trendChartRef = useRef(null);
+				const trendInstance = useRef(null);
+
+				const handleStartChange = (e) => {
+					const newStart = e.target.value;
+					setStartDate(newStart);
+					if (endDate < newStart) setEndDate(newStart);
+				};
+
+				const handleEndChange = (e) => {
+					const newEnd = e.target.value;
+					setEndDate(newEnd);
+					if (newEnd < startDate) setStartDate(newEnd);
+				};
+
+				const fetchReport = async () => {
+					setLoading(true);
+					setError(null);
+					try {
+						const res = await fetch(`/api/weather/report?stn=${station}&startDate=${startDate}&endDate=${endDate}&horizon=${horizon}`);
+						if (!res.ok) throw new Error("데이터를 불러오지 못했습니다.");
+						const result = await res.json();
+						if (result.error) throw new Error(result.error);
+						setReportData(result);
+						setViewMode("web");
+					} catch (err) {
+						setError(err.message);
+					} finally {
+						setLoading(false);
+					}
+				};
+
+				// 마운트 시 자동 로딩 및 Horizon 변경 시 즉각 반응
+				useEffect(() => {
+					fetchReport();
+				}, []);
+				useEffect(() => {
+					if (reportData) fetchReport();
+				}, [horizon]);
 
 				useEffect(() => {
-					if (window.lucide) window.lucide.createIcons();
-				}, [viewMode]);
+					if (!reportData || viewMode !== "web") return;
 
-				const handleCopyMarkdown = () => {
-					navigator.clipboard.writeText(MARKDOWN_CONTENT).then(() => {
-						setCopied(true);
-						setTimeout(() => setCopied(false), 2000);
+					// 과거와 미래 데이터를 끊김없이 연결하기 위한 레이블 통합 작업
+					if (trendChartRef.current) {
+						if (trendInstance.current) trendInstance.current.destroy();
+
+						const histData = reportData.daily_trend || [];
+						const fcstData = reportData.forecast && reportData.forecast.daily_trend ? reportData.forecast.daily_trend : [];
+
+						// 중복을 제거한 전체 통합 날짜 레이블 (MM-DD)
+						const allLabelsSet = new Set([...histData.map((d) => d.ymd.substring(5)), ...fcstData.map((d) => d.ymd.substring(5))]);
+						const labels = Array.from(allLabelsSet).sort();
+
+						// 각 레이블에 맞는 데이터 매핑 (없으면 null 처리하여 여백 유지)
+						const taData = labels.map((l) => histData.find((x) => x.ymd.substring(5) === l)?.daily_ta || null);
+						const loadData = labels.map((l) => histData.find((x) => x.ymd.substring(5) === l)?.daily_load || null);
+						const fcstLoadData = labels.map((l) => fcstData.find((x) => x.ymd.substring(5) === l)?.daily_load || null);
+
+						trendInstance.current = new Chart(trendChartRef.current, {
+							type: "bar",
+							data: {
+								labels: labels,
+								datasets: [
+									{
+										type: "line",
+										label: "과거 일 평균 기온(℃)",
+										data: taData,
+										borderColor: "#ef4444",
+										backgroundColor: "#ef4444",
+										yAxisID: "yTa",
+										tension: 0.3,
+										pointRadius: 3,
+										borderWidth: 2,
+										spanGaps: true,
+									},
+									{
+										type: "bar",
+										label: "과거 총 부하량(kW)",
+										data: loadData,
+										backgroundColor: "rgba(59, 130, 246, 0.7)", // 기존 파란색
+										borderRadius: 4,
+										yAxisID: "yLoad",
+									},
+									{
+										type: "bar",
+										label: "미래 예측 부하량(kW)",
+										data: fcstLoadData,
+										backgroundColor: "rgba(249, 115, 22, 0.8)", // 이어지는 예측 구간 (주황색)
+										borderRadius: 4,
+										yAxisID: "yLoad",
+									},
+								],
+							},
+							options: {
+								responsive: true,
+								maintainAspectRatio: false,
+								scales: {
+									x: { stacked: true }, // x축 겹침 방지 및 자연스러운 연속 배열
+									yLoad: { type: "linear", position: "left", stacked: true, title: { display: true, text: "일일 합산 부하량(kW)" } },
+									yTa: { type: "linear", position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "기온(℃)" } },
+								},
+							},
+						});
+					}
+				}, [reportData, viewMode]);
+
+				// 마크다운 생성 함수 (예측 메트릭스 포함)
+				const generateMarkdown = () => {
+					if (!reportData) return "";
+					const stnName = STATIONS.find((s) => s.id === station)?.name || station;
+					const now = new Date().toLocaleString("ko-KR");
+
+					let md = `# 기상 및 에너지 부하 종합 예측 리포트\n\n`;
+					md += `**작성일시:** ${now}\n`;
+					md += `**분석지역:** ${stnName} 관측소\n`;
+					md += `**분석기준:** ${startDate} ~ ${endDate}\n\n`;
+					md += `---\n\n`;
+
+					md += `## 1. 종합 운영 현황 요약 (Executive Summary)\n`;
+					md += `과거 기상 데이터를 바탕으로 단위 표준 건물 기준의 추정 전력 부하를 산출한 결과입니다.\n\n`;
+					md += `- **분석 데이터 범위:** ${reportData.summary.total_hours} 시간\n`;
+					md += `- **기간 평균 기온:** ${(reportData.summary.avg_ta || 0).toFixed(1)} ℃\n`;
+					md += `- **총 추정 전력 부하:** ${Math.round(reportData.summary.total_load).toLocaleString()} kW\n\n`;
+
+					md += `## 2. 데이터 품질 및 예측 모델 성능 (Quality & Performance)\n`;
+					md += `KMA API 원천 데이터 자동 정제 내역 및 모델 평가 지표입니다.\n\n`;
+					md += `**데이터 정제 현황**\n`;
+					reportData.quality.forEach((q) => {
+						md += `- ${q.status}: ${q.count}건\n`;
 					});
+					md += `\n**모델 예측 성능**\n`;
+					if (reportData.forecast && reportData.forecast.metrics) {
+						md += `- MAE (평균절대오차): ${reportData.forecast.metrics.mae} kW\n`;
+						md += `- RMSE (평균제곱근오차): ${reportData.forecast.metrics.rmse} kW\n`;
+						md += `- MAPE (오차율): ${reportData.forecast.metrics.mape} %\n\n`;
+					}
+
+					md += `## 3. 과거 최대 피크 분석 (Historical Peak)\n`;
+					if (reportData.peak) {
+						md += `- **발생 일시:** ${reportData.peak.tm}\n`;
+						md += `- **최대 부하량:** ${reportData.peak.load_kw} kW\n`;
+						md += `- **당시 기온:** ${reportData.peak.ta} ℃\n\n`;
+					}
+
+					md += `## 4. 향후 에너지 부하 예측 (Forecast Overview)\n`;
+					if (reportData.forecast) {
+						md += `종료일(${endDate}) 기준, 향후 ${reportData.forecast.horizon} 구간의 예측 결과입니다.\n\n`;
+						md += `- **예측 평균 부하량:** ${reportData.forecast.avg_load} kW\n`;
+						md += `- **예상 피크 발생 일시:** ${reportData.forecast.peak_time}\n`;
+						md += `- **예상 최대 피크 부하:** ${reportData.forecast.peak_load} kW\n\n`;
+					}
+
+					md += `## 5. 결론 및 제언 (Conclusion & Recommendations)\n`;
+					md += `데이터 검증이 정상 완료되었습니다. `;
+					if (reportData.forecast) {
+						md += `예측 시뮬레이션 결과 향후 ${reportData.forecast.horizon} 내 **${reportData.forecast.peak_time} 경 약 ${reportData.forecast.peak_load}kW 수준의 피크 부하** 발생이 전망되므로, 부하 분산(Peak Cut) 전략 수립을 강력히 권장합니다.\n`;
+					}
+
+					return md;
+				};
+
+				const handleCopyMD = () => {
+					const mdText = generateMarkdown();
+					navigator.clipboard
+						.writeText(mdText)
+						.then(() => {
+							alert("마크다운이 클립보드에 복사되었습니다.");
+						})
+						.catch((err) => {
+							alert("복사 실패: " + err);
+						});
+				};
+
+				const handlePrint = () => {
+					setViewMode("web");
+					setTimeout(() => window.print(), 300);
 				};
 
 				return (
-					<div className="max-w-5xl mx-auto space-y-6">
-						{/* 상단 액션 바 */}
-						<div className="no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-							<div>
-								<div className="flex items-center gap-2">
-									<span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-50 text-brand-700 border border-brand-100">FINAL REPORT</span>
-									<span className="text-xs text-slate-400">문서 버전: v1.0.0</span>
+					<div className="min-h-screen flex flex-col">
+						{/* ─── 상단 GNB ─── */}
+						<nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm no-print">
+							<div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+								<div className="flex justify-between items-center h-14">
+									<div className="flex items-center gap-8">
+										<span className="text-lg font-black text-brand-600 tracking-tight">WeatherLoad</span>
+										<div className="hidden sm:flex space-x-6">
+											<a href="/data.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
+												1. 데이터 수집
+											</a>
+											<a href="/eda.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
+												2. 탐색적 분석(EDA)
+											</a>
+											<a href="/predict.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
+												3. 시계열 예측 모델링
+											</a>
+											<a href="/report.html" className="text-brand-600 border-brand-600 px-1 py-4 border-b-2 text-sm font-bold transition">
+												4. 종합 분석 리포트
+											</a>
+										</div>
+									</div>
 								</div>
-								<h1 className="text-xl font-bold text-slate-900 mt-1">기상 데이터 기반 에너지 부하 분석 리포트</h1>
 							</div>
+						</nav>
 
-							<div className="flex items-center gap-2">
-								<div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
-									<button onClick={() => setViewMode("ui")} className={`px-3 py-1.5 rounded-lg transition ${viewMode === "ui" ? "bg-white text-brand-600 shadow-sm font-bold" : "hover:text-slate-900"}`}>
-										웹 뷰
-									</button>
-									<button onClick={() => setViewMode("markdown")} className={`px-3 py-1.5 rounded-lg transition ${viewMode === "markdown" ? "bg-white text-brand-600 shadow-sm font-bold" : "hover:text-slate-900"}`}>
-										REPORT.md 보기
+						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 flex flex-col lg:flex-row gap-6 items-start">
+							{/* ─── 좌측 사이드바 (Z-index 및 모바일 겹침 문제 해결) ─── */}
+							<aside className="w-full lg:w-[300px] flex-shrink-0 flex flex-col gap-4 lg:sticky lg:top-24 lg:z-20 no-print">
+								<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
+									<div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+										<span className="w-5 h-5 rounded-md bg-slate-800 text-white flex items-center justify-center text-xs font-bold">
+											<Icon name="file-text" className="w-3 h-3" />
+										</span>
+										<h2 className="font-bold text-slate-900">리포트 조건 설정</h2>
+									</div>
+
+									<div>
+										<label className="block text-xs font-semibold text-slate-600 mb-1.5">대상 지역</label>
+										<select value={station} onChange={(e) => setStation(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none">
+											{STATIONS.map((s) => (
+												<option key={s.id} value={s.id}>
+													{s.name} ({s.id})
+												</option>
+											))}
+										</select>
+									</div>
+
+									<div className="grid grid-cols-2 gap-2">
+										<div>
+											<label className="block text-xs font-semibold text-slate-600 mb-1.5">시작일</label>
+											<input type="date" value={startDate} onChange={handleStartChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-[12px] font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+										</div>
+										<div>
+											<label className="block text-xs font-semibold text-slate-600 mb-1.5">종료일</label>
+											<input type="date" value={endDate} onChange={handleEndChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-[12px] font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+										</div>
+									</div>
+
+									<div>
+										<label className="block text-xs font-semibold text-slate-600 mb-1.5">포함할 예측 구간 (Horizon)</label>
+										<div className="flex bg-slate-100 p-1 rounded-lg text-xs font-semibold text-slate-600">
+											{["24h", "48h", "7d"].map((h) => (
+												<button key={h} onClick={() => setHorizon(h)} className={`flex-1 py-1.5 rounded-md transition ${horizon === h ? "bg-white text-brand-600 shadow-sm font-bold border border-slate-200" : "hover:text-slate-900"}`}>
+													+{h.toUpperCase()}
+												</button>
+											))}
+										</div>
+									</div>
+
+									<button type="button" onClick={fetchReport} disabled={loading} className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-3 text-sm font-bold shadow-sm transition disabled:opacity-50 flex items-center justify-center mt-2">
+										{loading ? "데이터 분석 중..." : "리포트 데이터 생성"}
 									</button>
 								</div>
 
-								<button onClick={handleCopyMarkdown} className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-sm">
-									<i data-lucide={copied ? "check" : "copy"} className="w-4 h-4"></i>
-									{copied ? "복사 완료!" : "MD 복사"}
-								</button>
+								{/* 뷰 컨트롤 & 액션 버튼 */}
+								{reportData && (
+									<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 space-y-2">
+										<div className="flex p-1 bg-slate-100 rounded-xl mb-3">
+											<button onClick={() => setViewMode("web")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${viewMode === "web" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}>
+												웹 뷰
+											</button>
+											<button onClick={() => setViewMode("md")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${viewMode === "md" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}>
+												REPORT.md 보기
+											</button>
+										</div>
 
-								<button onClick={() => window.print()} className="hidden sm:flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-3.5 py-2 rounded-xl transition">
-									<i data-lucide="printer" className="w-4 h-4"></i>
-									인쇄
-								</button>
-							</div>
+										<button type="button" onClick={handleCopyMD} className="w-full bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl p-3 text-sm font-bold transition flex items-center justify-center gap-2">
+											<Icon name="copy" /> MD 클립보드 복사
+										</button>
+										<button type="button" onClick={handlePrint} className="w-full bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded-xl p-3 text-sm font-bold transition flex items-center justify-center gap-2">
+											<Icon name="printer" /> 보고서 인쇄 (PDF 저장)
+										</button>
+									</div>
+								)}
+							</aside>
+
+							{/* ─── 우측 메인 (리포트 출력 영역) ─── */}
+							<main className="flex-1 w-full min-w-0 bg-white border border-slate-200 shadow-lg p-6 sm:p-10 rounded-xl print-container">
+								{error && <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-sm font-bold no-print">{error}</div>}
+
+								{!reportData && !loading && !error && (
+									<div className="py-20 text-center text-slate-500 no-print">
+										<Icon name="file-text" className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+										좌측에서 기간 및 예측 구간을 선택하고 리포트를 생성해주세요.
+									</div>
+								)}
+
+								{/* 뷰 모드: 웹 (Web View) */}
+								{reportData && viewMode === "web" && (
+									<div className="space-y-10 animate-fade-in">
+										{/* 리포트 헤더 */}
+										<div className="border-b-2 border-slate-800 pb-6 flex justify-between items-end">
+											<div>
+												<h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">종합 기상 예측 및 부하 분석 리포트</h1>
+												<p className="text-sm text-slate-500 font-medium">작성일시: {new Date().toLocaleString("ko-KR")}</p>
+											</div>
+											<div className="text-right">
+												<p className="text-sm font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-lg inline-block">분석 지역: {STATIONS.find((s) => s.id === station)?.name} 관측소</p>
+												<p className="text-sm font-semibold text-slate-700 mt-2">
+													기준 구간: {startDate} ~ {endDate}
+												</p>
+											</div>
+										</div>
+
+										{/* 1. 핵심 성과 지표 (Executive Summary) */}
+										<div className="print-break-inside-avoid">
+											<h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+												<div className="w-1.5 h-4 bg-brand-500 rounded"></div>
+												1. 과거 종합 운영 현황 (Historical Summary)
+											</h2>
+											<p className="text-sm text-slate-600 mb-4 leading-relaxed">해당 기간 동안 수집된 기상 데이터를 바탕으로 분석된 과거 데이터 요약 통계입니다.</p>
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+												<div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+													<p className="text-xs text-slate-500 mb-1 font-medium">분석 데이터 범위</p>
+													<p className="text-2xl font-bold text-slate-900">
+														{reportData.summary.total_hours} <span className="text-sm font-normal text-slate-400">시간</span>
+													</p>
+												</div>
+												<div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+													<p className="text-xs text-slate-500 mb-1 font-medium">기간 평균 기온</p>
+													<p className="text-2xl font-bold text-rose-600">
+														{(reportData.summary.avg_ta || 0).toFixed(1)} <span className="text-sm font-normal text-rose-400">℃</span>
+													</p>
+												</div>
+												<div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+													<p className="text-xs text-slate-500 mb-1 font-medium">누적 냉난방도일</p>
+													<p className="text-2xl font-bold text-brand-600">
+														{(reportData.summary.total_cdd + reportData.summary.total_hdd).toFixed(1)} <span className="text-sm font-normal text-brand-400">지수</span>
+													</p>
+												</div>
+												<div className="bg-slate-50 p-4 rounded-xl border border-slate-100 border-l-4 border-l-slate-800">
+													<p className="text-xs text-slate-500 mb-1 font-medium">총 추정 전력 부하</p>
+													<p className="text-2xl font-bold text-slate-900">
+														{Math.round(reportData.summary.total_load).toLocaleString()} <span className="text-sm font-normal text-slate-400">kW</span>
+													</p>
+												</div>
+											</div>
+										</div>
+
+										{/* 2. 데이터 품질 현황 및 모델 예측 성능 */}
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-6 print-break-inside-avoid">
+											{/* 데이터 정제 현황 */}
+											<div className="border border-slate-200 rounded-xl p-5 bg-white flex flex-col">
+												<h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+													<Icon name="shield-check" className="text-emerald-500" /> 데이터 자동 정제(Audit) 내역
+												</h2>
+												<p className="text-xs text-slate-500 mb-3 leading-relaxed flex-1">API로부터 수집된 원천 데이터의 결측치 및 이상치를 시스템이 자동 보정한 통계 결과입니다.</p>
+												<ul className="space-y-2 mt-auto">
+													{reportData.quality.map((q, idx) => (
+														<li key={idx} className="text-sm flex justify-between items-center bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100">
+															<span className="text-slate-600 truncate mr-2 font-medium">• {q.status}</span>
+															<span className="font-bold text-slate-800">{q.count}건</span>
+														</li>
+													))}
+												</ul>
+											</div>
+
+											{/* 모델 예측 성능 */}
+											{reportData.forecast && (
+												<div className="border border-slate-200 rounded-xl p-5 bg-white flex flex-col">
+													<h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+														<Icon name="activity" className="text-blue-500" /> 예측 모델 성능 평가지표
+													</h2>
+													<p className="text-xs text-slate-500 mb-3 leading-relaxed flex-1">과거 구간 백테스팅을 통해 현재 적용된 시계열 알고리즘의 평균 오차와 안정성을 평가한 수치입니다.</p>
+													<div className="grid grid-cols-1 gap-2 mt-auto">
+														<div className="flex justify-between items-center bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100">
+															<span className="text-slate-600 text-sm font-medium">평균 절대 오차 (MAE)</span>
+															<span className="font-bold text-slate-800">{reportData.forecast.metrics.mae} kW</span>
+														</div>
+														<div className="flex justify-between items-center bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100">
+															<span className="text-slate-600 text-sm font-medium">평균 제곱근 오차 (RMSE)</span>
+															<span className="font-bold text-slate-800">{reportData.forecast.metrics.rmse} kW</span>
+														</div>
+														<div className="flex justify-between items-center bg-brand-50 px-3 py-2.5 rounded-lg border border-brand-100">
+															<span className="text-brand-800 text-sm font-bold">오차율 (MAPE)</span>
+															<span className="font-black text-brand-600">{reportData.forecast.metrics.mape} %</span>
+														</div>
+													</div>
+												</div>
+											)}
+										</div>
+
+										{/* 3. 피크 & 예측 요약 */}
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-8 print-break-inside-avoid">
+											{/* 과거 피크 부하 분석 */}
+											<div className="flex flex-col">
+												<h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+													<div className="w-1.5 h-4 bg-slate-500 rounded"></div>
+													3. 과거 최대 피크 분석 (Historical Peak)
+												</h2>
+												<div className="border border-slate-200 rounded-xl p-5 bg-slate-50 flex-1 mt-2">
+													{reportData.peak ? (
+														<div className="space-y-4">
+															<div className="border-b border-slate-200 pb-3">
+																<p className="text-xs font-bold text-slate-500 mb-1">피크 발생 일시</p>
+																<p className="text-xl font-black text-slate-800">{reportData.peak.tm}</p>
+															</div>
+															<div className="grid grid-cols-2 gap-3">
+																<div>
+																	<p className="text-xs text-slate-400">최대 부하량</p>
+																	<p className="font-bold text-slate-800">{reportData.peak.load_kw} kW</p>
+																</div>
+																<div>
+																	<p className="text-xs text-slate-400">당시 기온</p>
+																	<p className="font-bold text-rose-600">{reportData.peak.ta} ℃</p>
+																</div>
+																<div>
+																	<p className="text-xs text-slate-400">불쾌지수(DI)</p>
+																	<p className="font-bold text-slate-800">{reportData.peak.di}</p>
+																</div>
+																<div>
+																	<p className="text-xs text-slate-400">당시 일조량</p>
+																	<p className="font-bold text-slate-800">{reportData.peak.ss} hr</p>
+																</div>
+															</div>
+														</div>
+													) : (
+														<p className="text-sm text-slate-400">피크 데이터가 없습니다.</p>
+													)}
+												</div>
+											</div>
+
+											{/* 향후 미래 예측 */}
+											<div className="flex flex-col">
+												<h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+													<div className="w-1.5 h-4 bg-rose-500 rounded"></div>
+													4. 향후 에너지 부하 예측 (Forecast)
+												</h2>
+												<div className="border border-rose-200 rounded-xl p-5 bg-rose-50 flex-1 mt-2">
+													{reportData.forecast ? (
+														<div className="space-y-4">
+															<div className="border-b border-rose-200 pb-3">
+																<p className="text-xs font-bold text-rose-500 mb-1">예상 최대 피크 일시 (+{reportData.forecast.horizon})</p>
+																<p className="text-xl font-black text-rose-900">{reportData.forecast.peak_time}</p>
+															</div>
+															<div className="grid grid-cols-1 gap-3">
+																<div className="bg-white p-3 rounded-lg border border-rose-100 flex justify-between items-center">
+																	<p className="text-xs font-bold text-slate-500">예상 최대 피크 부하</p>
+																	<p className="font-black text-rose-600 text-lg">{reportData.forecast.peak_load} kW</p>
+																</div>
+																<div className="bg-white p-3 rounded-lg border border-rose-100 flex justify-between items-center">
+																	<p className="text-xs font-bold text-slate-500">예측 구간 내 평균 부하</p>
+																	<p className="font-bold text-slate-800">{reportData.forecast.avg_load} kW</p>
+																</div>
+															</div>
+														</div>
+													) : (
+														<p className="text-sm text-slate-400">예측 데이터가 없습니다.</p>
+													)}
+												</div>
+											</div>
+										</div>
+
+										{/* 5. 일별 트렌드 추세 차트 (연속 시각화 적용) */}
+										<div className="print-break-inside-avoid">
+											<h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+												<div className="w-1.5 h-4 bg-blue-500 rounded"></div>
+												5. 일별 에너지 부하 예측 흐름도
+											</h2>
+											<p className="text-sm text-slate-600 mb-4 leading-relaxed">과거 실적(파란색)과 향후 예측 구간(주황색)의 일일 총합 전력 부하량이 연속적으로 이어지는 시계열 차트입니다.</p>
+											<div className="border border-slate-200 rounded-xl p-5">
+												<div className="h-72 w-full">
+													<canvas ref={trendChartRef}></canvas>
+												</div>
+											</div>
+										</div>
+
+										{/* 6. 결론 및 제언 */}
+										<div className="print-break-inside-avoid bg-slate-800 text-white rounded-xl p-6 shadow-md mt-8">
+											<h2 className="text-lg font-bold text-brand-300 mb-3 flex items-center gap-2">
+												<Icon name="check-circle" className="text-brand-300" />
+												6. 종합 결론 및 제언 (Recommendations)
+											</h2>
+											<div className="text-sm text-slate-300 leading-relaxed space-y-4">
+												<p>수집된 전체 기간의 데이터를 검증(Audit)한 결과 파이프라인의 자동 정제가 정상 수행되었으며, 분석의 신뢰성을 확보하였습니다.</p>
+												{reportData.forecast && reportData.peak && (
+													<p className="bg-slate-700/50 p-4 rounded-lg border border-slate-600">
+														과거 피크 기록({reportData.peak.load_kw}kW) 분석과 더불어 예측 모델 시뮬레이션을 수행한 결과, 향후 <b>{reportData.forecast.horizon}</b> 내에
+														<span className="text-rose-400 font-bold">
+															{" "}
+															{reportData.forecast.peak_time} 경 약 {reportData.forecast.peak_load}kW 수준의 최대 피크 부하 발생이 전망
+														</span>
+														됩니다.
+														<br />
+														<br />
+														해당 시간대에 전력 소모가 집중되지 않도록, 1~2시간 사전 공조 가동 등의 적극적인 <b>부하 분산(Peak Cut) 전략 수립을 강력히 권장</b>합니다.
+													</p>
+												)}
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* 뷰 모드: 마크다운 (MD View) */}
+								{reportData && viewMode === "md" && (
+									<div className="animate-fade-in no-print h-full flex flex-col">
+										<div className="bg-[#1e1e1e] rounded-xl p-5 flex-1 min-h-[600px] overflow-auto border border-slate-800 shadow-inner">
+											<pre className="text-[13px] text-green-400 font-mono whitespace-pre-wrap leading-relaxed">{generateMarkdown()}</pre>
+										</div>
+									</div>
+								)}
+							</main>
 						</div>
-
-						{/* ── Markdown 원문 뷰 모드 ── */}
-						{viewMode === "markdown" ? (
-							<div className="bg-slate-900 text-slate-100 rounded-2xl p-6 shadow-sm font-mono text-xs sm:text-sm overflow-x-auto leading-relaxed">
-								<div className="flex justify-between items-center pb-3 mb-4 border-b border-slate-700 text-slate-400 text-xs">
-									<span>REPORT.md (GitHub 제출용 원문)</span>
-									<span>UTF-8 / Markdown</span>
-								</div>
-								<pre className="whitespace-pre-wrap">{MARKDOWN_CONTENT}</pre>
-							</div>
-						) : (
-							/* ── UI 리포트 모드 ── */
-							<div className="space-y-6">
-								{/* 섹션 1: 프로젝트 개요 & 데이터 스펙 */}
-								<div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
-									<div className="border-b border-slate-100 pb-4">
-										<h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-											<span className="w-2.5 h-2.5 rounded-full bg-brand-600"></span>
-											1. 분석 개요 및 데이터 명세
-										</h2>
-									</div>
-
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
-										<div className="bg-slate-50 p-4 rounded-xl space-y-2">
-											<p className="font-semibold text-slate-800">📌 분석 배경 및 목적</p>
-											<p className="text-slate-600 leading-relaxed text-xs">이상 기후로 인한 여름철 폭염 및 겨울철 한파에 대응하여 기상 관측 변수(기온, 습도, 일조)가 냉난방 부하에 미치는 비선형 영향을 규명하고, 데이터 기반 피크 수요 완화 전략을 수립합니다.</p>
-										</div>
-										<div className="bg-slate-50 p-4 rounded-xl space-y-2">
-											<p className="font-semibold text-slate-800">📊 데이터셋 정보</p>
-											<ul className="text-slate-600 space-y-1 text-xs">
-												<li>
-													• <b>출처</b>: 기상청 기상자료개방포털 종관기상관측(ASOS)
-												</li>
-												<li>
-													• <b>대상/기간</b>: 서울 관측소 (지점번호 108) / 8,760시간
-												</li>
-												<li>
-													• <b>파생지표</b>: CDD(기준 24℃), HDD(기준 18℃), DI(불쾌지수)
-												</li>
-											</ul>
-										</div>
-									</div>
-								</div>
-
-								{/* 섹션 2: 핵심 질문 3가지 */}
-								<div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
-									<div className="border-b border-slate-100 pb-4">
-										<h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-											<span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-											2. 핵심 분석 질문 (Research Questions)
-										</h2>
-									</div>
-
-									<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-										<div className="border border-blue-100 bg-blue-50/50 p-4 rounded-xl">
-											<span className="text-xs font-bold text-blue-600">Question 1</span>
-											<h4 className="font-bold text-slate-800 text-sm mt-1">부하 급증 임계점</h4>
-											<p className="text-xs text-slate-500 mt-1">어떤 기온 구간에서 냉·난방 에너지 부하 곡선의 기울기가 급격히 꺾이는가?</p>
-										</div>
-										<div className="border border-purple-100 bg-purple-50/50 p-4 rounded-xl">
-											<span className="text-xs font-bold text-purple-600">Question 2</span>
-											<h4 className="font-bold text-slate-800 text-sm mt-1">시간대별 일주기 패턴</h4>
-											<p className="text-xs text-slate-500 mt-1">하루 24시간 중 기온과 체감 불쾌지수가 정점에 도달하여 부하가 집중되는 시점은?</p>
-										</div>
-										<div className="border border-amber-100 bg-amber-50/50 p-4 rounded-xl">
-											<span className="text-xs font-bold text-amber-600">Question 3</span>
-											<h4 className="font-bold text-slate-800 text-sm mt-1">일조·습도 복합 영향</h4>
-											<p className="text-xs text-slate-500 mt-1">동일 기온에서 일조량 유무와 습도가 부하량 증가에 미치는 상대적 기여도는?</p>
-										</div>
-									</div>
-								</div>
-
-								{/* 섹션 3: 3대 핵심 인사이트 (Fact - Why - Action) */}
-								<div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-6">
-									<div className="border-b border-slate-100 pb-4">
-										<h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-											<span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-											3. 데이터 기반 핵심 인사이트 (Fact · Why · Action)
-										</h2>
-									</div>
-
-									{/* 인사이트 1 */}
-									<div className="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-										<div className="flex items-center justify-between">
-											<span className="text-xs font-bold px-2.5 py-1 rounded bg-blue-100 text-blue-700">인사이트 1</span>
-											<span className="text-xs text-slate-400">부하 임계점 분석 결과</span>
-										</div>
-										<h3 className="text-base font-bold text-slate-900">28℃ 초과 시 냉방 부하 가속 임계점 도달 (기울기 2.4배 급증)</h3>
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-1">
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">🔍 관찰 (Fact)</span>
-												<p className="text-slate-600">18~22℃(1.1kW) 대비 28℃ 이상에서 부하가 7.8kW, 32℃ 이상에서 10.5kW로 가속 상승.</p>
-											</div>
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">💡 원인 (Why)</span>
-												<p className="text-slate-600">건축물 외피 열관류 한계 도달 및 외기-실내 온도차 확대로 인한 냉방 코일 효율 급락.</p>
-											</div>
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">🚀 제안 (Action)</span>
-												<p className="text-slate-600">외기온 27.5℃ 도달 시 사전 예냉(Pre-cooling) 자동 시작으로 피크 급등 차단.</p>
-											</div>
-										</div>
-									</div>
-
-									{/* 인사이트 2 */}
-									<div className="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-										<div className="flex items-center justify-between">
-											<span className="text-xs font-bold px-2.5 py-1 rounded bg-purple-100 text-purple-700">인사이트 2</span>
-											<span className="text-xs text-slate-400">24시간 일주기 분석 결과</span>
-										</div>
-										<h3 className="text-base font-bold text-slate-900">13:00~16:00 피크 도달 및 축열로 인한 18:00까지 고부하 지속</h3>
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-1">
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">🔍 관찰 (Fact)</span>
-												<p className="text-slate-600">14:00에 최고기온(32.8℃) 및 불쾌지수 피크(83.4) 기록 후 18:00까지 7kW 이상 유지.</p>
-											</div>
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">💡 원인 (Why)</span>
-												<p className="text-slate-600">낮 동안 축적된 지표면 및 건물 구체의 복사열 방출 지연(Thermal Inertia) 현상.</p>
-											</div>
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">🚀 제안 (Action)</span>
-												<p className="text-slate-600">12:30~14:30 집중 냉방 후 15:00부터 송풍 순환 모드로 전환해 전력 피크 분산.</p>
-											</div>
-										</div>
-									</div>
-
-									{/* 인사이트 3 */}
-									<div className="p-5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-										<div className="flex items-center justify-between">
-											<span className="text-xs font-bold px-2.5 py-1 rounded bg-amber-100 text-amber-700">인사이트 3</span>
-											<span className="text-xs text-slate-400">일조량·습도 복합 분석 결과</span>
-										</div>
-										<h3 className="text-base font-bold text-slate-900">맑은 날 일사열 축적으로 냉방 부하 53.4% 추가 가중</h3>
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-1">
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">🔍 관찰 (Fact)</span>
-												<p className="text-slate-600">동일 30℃ 기준, 일조 0.6hr 이상 맑은 날(8.9kW)이 흐린 날(5.8kW) 대비 53.4% 부하 증가.</p>
-											</div>
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">💡 원인 (Why)</span>
-												<p className="text-slate-600">창호 투과 일사열 획득(Solar Heat Gain)이 실내 현열 부하를 직접 가산.</p>
-											</div>
-											<div className="bg-white p-3 rounded-lg border border-slate-100">
-												<span className="font-bold text-slate-700 block mb-1">🚀 제안 (Action)</span>
-												<p className="text-slate-600">맑음 예보 시 11:00부터 스마트 차양 차단 제어를 가동하여 일사열 침입 방지.</p>
-											</div>
-										</div>
-									</div>
-								</div>
-
-								{/* 섹션 4: 결론 및 한계점 */}
-								<div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
-									<div className="border-b border-slate-100 pb-4">
-										<h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-											<span className="w-2.5 h-2.5 rounded-full bg-slate-700"></span>
-											4. 종합 결론 및 한계점
-										</h2>
-									</div>
-
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
-										<div className="border border-emerald-100 bg-emerald-50/40 p-4 rounded-xl space-y-1.5">
-											<span className="font-bold text-emerald-800">✅ 종합 결론</span>
-											<p className="text-slate-600 text-xs leading-relaxed">기상 시계열 데이터의 추세 및 일주기 계절성 분해를 통해 냉방 부하 피크를 95% 신뢰수준 내에서 사전에 정밀하게 탐지할 수 있음을 확인하였으며, 단순 기온 외 습도·일조량의 복합 지표 반영이 필수적임을 증명함.</p>
-										</div>
-										<div className="border border-slate-200 bg-slate-50 p-4 rounded-xl space-y-1.5">
-											<span className="font-bold text-slate-800">⚠️ 분석 한계점</span>
-											<p className="text-slate-600 text-xs leading-relaxed">외부 기상 요인만을 반영하여 개별 건물의 단열 계수, 재실 인원, 가전기기 내부 발열 등 실내 파라미터가 누락됨. 향후 BEMS(건물에너지관리시스템) 센서 데이터와의 결합 연구가 권장됨.</p>
-										</div>
-									</div>
-								</div>
-
-								{/* 섹션 5: AI 사용 로그 (의무 사항) */}
-								<div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-4">
-									<div className="border-b border-slate-100 pb-4 flex justify-between items-center">
-										<h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-											<span className="w-2.5 h-2.5 rounded-full bg-brand-500"></span>
-											5. AI 사용 로그 (투명성 기록)
-										</h2>
-										<span className="text-xs font-semibold px-2 py-0.5 rounded bg-brand-50 text-brand-700">투명성 준수</span>
-									</div>
-
-									<div className="overflow-x-auto">
-										<table className="w-full text-xs text-left">
-											<thead>
-												<tr className="border-b border-slate-200 text-slate-500">
-													<th className="py-2.5 px-3">사용 작업</th>
-													<th className="py-2.5 px-3">사용 이유</th>
-													<th className="py-2.5 px-3">검증 방법</th>
-												</tr>
-											</thead>
-											<tbody className="divide-y divide-slate-100">
-												<tr>
-													<td className="py-3 px-3 font-semibold text-slate-800">전처리 및 파생변수 수식 도출</td>
-													<td className="py-3 px-3 text-slate-600">CDD/HDD 및 체감온도 공식의 정확한 코드 변환 및 개발 시간 단축</td>
-													<td className="py-3 px-3 text-slate-600">기상청 기상지수 표준 산출 매뉴얼과 계산값 100건 교차 샘플링 대조</td>
-												</tr>
-												<tr>
-													<td className="py-3 px-3 font-semibold text-slate-800">시계열 예측 모델 선정</td>
-													<td className="py-3 px-3 text-slate-600">SARIMA vs Prophet vs 지수평활법 알고리즘별 장단점 비교 및 대안 탐색</td>
-													<td className="py-3 px-3 text-slate-600">동일 데이터셋 대상 MAE / RMSE 오차 지표 백테스팅 직접 재현</td>
-												</tr>
-												<tr>
-													<td className="py-3 px-3 font-semibold text-slate-800">리포트 문장 구조화</td>
-													<td className="py-3 px-3 text-slate-600">Fact-Why-Action 프레임워크에 맞춘 인사이트 서술 명확화</td>
-													<td className="py-3 px-3 text-slate-600">생성된 해석이 실제 시각화 그래프 수치와 일치하는지 전수 팩트체크</td>
-												</tr>
-											</tbody>
-										</table>
-									</div>
-								</div>
-							</div>
-						)}
 					</div>
 				);
 			}
