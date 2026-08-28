@@ -6,8 +6,8 @@ import random
 
 router = APIRouter()
 
-@router.get("/predict")
-async def get_prediction(stn: str, startDate: str, endDate: str, modelType: str = "prophet", horizon: str = "24h"):
+@router.get("/forecast")
+async def get_forecast(stn: str, startDate: str, endDate: str, modelType: str = "prophet", horizon: str = "24h"):
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -142,7 +142,7 @@ async def get_prediction(stn: str, startDate: str, endDate: str, modelType: str 
             }
         }
     except Exception as e:
-        print(f"Predict API Error: {e}")
+        print(f"Forecast API Error: {e}")
         raise e
     finally:
         conn.close()

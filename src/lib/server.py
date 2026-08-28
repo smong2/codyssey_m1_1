@@ -14,7 +14,7 @@ app.include_router(dashboard.router, prefix="/api/weather", tags=["Dashboard"])
 app.include_router(collect.router, prefix="/api/weather", tags=["Collect"])
 app.include_router(view.router, prefix="/api/weather", tags=["View"])
 app.include_router(eda.router, prefix="/api/weather", tags=["EDA"])
-app.include_router(forecast.router, prefix="/api/weather", tags=["forecast"])
+app.include_router(forecast.router, prefix="/api/weather", tags=["Forecast"])
 app.include_router(report.router, prefix="/api/weather", tags=["Report"])
 
 # 프론트엔드 HTML 서빙
