@@ -1,23 +1,15 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" class="notranslate" translate="no">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="google" content="notranslate" />
-		<base href="/" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>WeatherLoad | 기상 데이터 에너지 부하 분석</title>
+		<title>WeatherLoad | 기상 부하 예측 대시보드</title>
 
-		<!-- Tailwind CSS CDN -->
 		<script src="https://cdn.tailwindcss.com"></script>
-		<!-- React & ReactDOM CDN -->
 		<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 		<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-		<!-- Babel (JSX 변환용) -->
 		<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-		<!-- Lucide Icons -->
-		<script src="https://unpkg.com/lucide@latest"></script>
 
-		<!-- Pretendard 폰트 -->
 		<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
 		<style>
@@ -28,286 +20,266 @@
 					sans-serif;
 			}
 			::-webkit-scrollbar {
-				width: 8px;
-				height: 8px;
+				width: 6px;
+				height: 6px;
 			}
 			::-webkit-scrollbar-thumb {
 				background: #cbd5e1;
-				border-radius: 4px;
-			}
-			::-webkit-scrollbar-track {
-				background: transparent;
+				border-radius: 3px;
 			}
 		</style>
 
-		<!-- Tailwind 커스텀 설정 -->
 		<script>
-			tailwind.config = {
-				theme: {
-					extend: {
-						colors: {
-							brand: {
-								50: "#eff6ff",
-								100: "#dbeafe",
-								500: "#3b82f6",
-								600: "#2563eb",
-								700: "#1d4ed8",
-								900: "#1e3a8a",
-							},
-						},
-						animation: {
-							"fade-in": "fadeIn 0.4s ease-in-out",
-						},
-						keyframes: {
-							fadeIn: {
-								"0%": { opacity: "0", transform: "translateY(8px)" },
-								"100%": { opacity: "1", transform: "translateY(0)" },
-							},
-						},
-					},
-				},
-			};
+			tailwind.config = { theme: { extend: { colors: { brand: { 50: "#eff6ff", 100: "#dbeafe", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" } } } } };
 		</script>
 	</head>
-	<body class="bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8 notranslate" translate="no">
+	<body class="bg-slate-50 text-slate-800 notranslate" translate="no">
 		<div id="root"></div>
 
 		<script type="text/babel">
-			const { useState, useEffect, useCallback } = React;
+			const { useState, useEffect } = React;
 
-			// 네비게이션 메뉴 및 로드할 파일 매핑
-			const NAV_ITEMS = [
-				{ id: "dashboard", label: "대시보드", icon: "layout-dashboard", file: "./dashboard.html" },
-				{ id: "collect", label: "데이터 수집/정제", icon: "database", file: "./data.html" },
-				{ id: "eda", label: "탐색적 분석(EDA)", icon: "bar-chart-3", file: "./eda.html" },
-				{ id: "forecast", label: "시계열 예측", icon: "trending-up", file: "./predict.html" },
-				{ id: "report", label: "리포트", icon: "file-text", file: "./report.html" },
+			const STATIONS = [
+				{ id: "108", name: "서울" },
+				{ id: "112", name: "인천" },
+				{ id: "159", name: "부산" },
+				{ id: "143", name: "대구" },
+				{ id: "156", name: "광주" },
+				{ id: "133", name: "대전" },
 			];
 
-			// ===== GNB (상단 네비게이션 바) =====
-			function Navbar({ activeMenu, setActiveMenu, onMenuToggle }) {
-				return (
-					<header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
-						<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-							<div className="flex items-center justify-between h-16">
-								{/* 로고 영역 */}
-								<div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveMenu("dashboard")}>
-									<div className="w-9 h-9 bg-gradient-to-br from-brand-500 to-brand-700 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-brand-500/30">W</div>
-									<span className="text-lg font-bold tracking-tight text-slate-900">
-										Weather<span className="text-brand-600">Load</span>
-									</span>
-								</div>
-
-								{/* 데스크탑 메뉴 */}
-								<nav className="hidden md:flex items-center gap-1">
-									{NAV_ITEMS.map((item) => (
-										<button key={item.id} onClick={() => setActiveMenu(item.id)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeMenu === item.id ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-100"}`}>
-											{item.label}
-										</button>
-									))}
-								</nav>
-
-								{/* 모바일 햄버거 버튼 */}
-								<button onClick={onMenuToggle} className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition">
-									<i data-lucide="menu" className="w-6 h-6"></i>
-								</button>
-							</div>
-						</div>
-					</header>
-				);
+			function Icon({ name, className = "w-4 h-4" }) {
+				if (name === "database")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+						</svg>
+					);
+				if (name === "activity")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+						</svg>
+					);
+				if (name === "check-circle")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					);
+				if (name === "alert-circle")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+						</svg>
+					);
+				if (name === "arrow-right")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+						</svg>
+					);
+				return null;
 			}
 
-			// ===== 모바일 사이드 메뉴 =====
-			function MobileMenu({ isOpen, activeMenu, setActiveMenu, onClose }) {
-				if (!isOpen) return null;
-				return (
-					<div className="md:hidden fixed inset-0 z-50">
-						{/* 배경 오버레이 */}
-						<div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
-						{/* 메뉴 패널 */}
-						<div className="absolute top-0 right-0 w-64 h-full bg-white shadow-2xl p-4 animate-fade-in">
-							<div className="flex justify-between items-center mb-6 pt-2">
-								<span className="font-bold text-slate-900">메뉴</span>
-								<button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
-									<i data-lucide="x" className="w-5 h-5"></i>
-								</button>
-							</div>
-							<nav className="flex flex-col gap-1">
-								{NAV_ITEMS.map((item) => (
-									<button
-										key={item.id}
-										onClick={() => {
-											setActiveMenu(item.id);
-											onClose();
-										}}
-										className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${activeMenu === item.id ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-100"}`}
-									>
-										<i data-lucide={item.icon} className="w-5 h-5"></i>
-										{item.label}
-									</button>
-								))}
-							</nav>
-						</div>
-					</div>
-				);
-			}
+			function MainDashboard() {
+				const [station, setStation] = useState("108");
+				const [stats, setStats] = useState(null);
+				const [loading, setLoading] = useState(true);
 
-			// ===== 메인 콘텐츠 뷰 영역 =====
-			function MainContent({ activeMenu, pageHtml, loading, error }) {
-				const current = NAV_ITEMS.find((i) => i.id === activeMenu);
-
-				// 1. 로딩 상태
-				if (loading) {
-					return (
-						<main className="pt-16 min-h-screen flex items-center justify-center">
-							<div className="text-center py-16 animate-fade-in">
-								<div className="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin mx-auto mb-4"></div>
-								<p className="text-slate-600 text-sm font-medium">'{current?.label}' 화면을 불러오는 중입니다...</p>
-							</div>
-						</main>
-					);
-				}
-
-				// 2. 에러 상태 (CORS 또는 파일 누락 등)
-				if (error) {
-					return (
-						<main className="pt-16 min-h-screen">
-							<div className="max-w-4xl mx-auto px-4 py-12 animate-fade-in">
-								<div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-amber-900 shadow-sm">
-									<div className="flex items-center gap-3 mb-3">
-										<div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-700">
-											<i data-lucide="alert-circle" className="w-6 h-6"></i>
-										</div>
-										<div>
-											<h2 className="text-lg font-bold">화면 로드 안내</h2>
-											<p className="text-sm text-amber-700">{error}</p>
-										</div>
-									</div>
-
-									<div className="mt-4 pt-4 border-t border-amber-200/60 text-xs text-amber-800 space-y-2">
-										<p className="font-semibold">💡 로컬 파일 직접 실행(CORS) 관련 해결 가이드:</p>
-										<ul className="list-disc list-inside space-y-1 pl-1">
-											<li>
-												브라우저에서 직접 <code className="bg-amber-100 px-1 py-0.5 rounded">file:///</code>로 열면 fetch 보안 정책에 의해 차단될 수 있습니다.
-											</li>
-											<li>
-												터미널에서 <code className="bg-amber-100 px-1 py-0.5 rounded">python -m http.server 8000</code> 실행 후 <code className="bg-amber-100 px-1 py-0.5 rounded">http://localhost:8000</code>으로 접속해 주세요.
-											</li>
-											<li>
-												또는 해당 탭 파일(<code className="bg-amber-100 px-1 py-0.5 rounded">{current?.file}</code>)이 같은 폴더에 생성되어 있는지 확인해 주세요.
-											</li>
-										</ul>
-									</div>
-								</div>
-							</div>
-						</main>
-					);
-				}
-
-				// 3. fetch로 로드한 서브 페이지 iframe 렌더링
-				if (pageHtml) {
-					return (
-						<main className="pt-16 min-h-screen">
-							<iframe title={current?.label} srcDoc={pageHtml} className="w-full min-h-[calc(100vh-4rem)] border-0" />
-						</main>
-					);
-				}
-
-				// 4. 기본 폴백 뷰 (파일이 없을 때의 안내 카드)
-				return (
-					<main className="pt-16 min-h-screen">
-						<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
-							<div className="mb-8">
-								<div className="flex items-center gap-3 mb-2">
-									<div className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center">
-										<i data-lucide={current?.icon} className="w-5 h-5 text-brand-600"></i>
-									</div>
-									<h1 className="text-2xl font-bold text-slate-900">{current?.label}</h1>
-								</div>
-								<p className="text-slate-500 text-sm">기상 데이터 기반 냉난방 에너지 부하 분석 서비스</p>
-							</div>
-
-							<div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center py-16">
-								<div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-slate-400">
-									<i data-lucide="file-code-2" className="w-6 h-6"></i>
-								</div>
-								<h3 className="font-semibold text-slate-800 text-base mb-1">{current?.file} 파일이 필요합니다</h3>
-								<p className="text-sm text-slate-500">해당 탭의 독립 HTML 파일이 추가되면 자동으로 화면이 연동됩니다.</p>
-							</div>
-						</div>
-					</main>
-				);
-			}
-
-			// ===== 앱 루트 =====
-			function App() {
-				const [activeMenu, setActiveMenu] = useState("dashboard");
-				const [mobileOpen, setMobileOpen] = useState(false);
-
-				// 탭별 로드된 HTML 캐시 저장소 { collect: "<html>...", eda: "<html>..." }
-				const [pagesCache, setPagesCache] = useState({});
-				const [loading, setLoading] = useState(false);
-				const [error, setError] = useState(null);
-
-				// 페이지 fetch 로딩 핸들러
-				const loadPageContent = useCallback(
-					async (tabId) => {
-						const item = NAV_ITEMS.find((nav) => nav.id === tabId);
-						if (!item || !item.file) return;
-
-						// 이미 캐시되어 있으면 다시 fetch하지 않음
-						if (pagesCache[tabId]) {
-							setError(null);
-							return;
-						}
-
-						// file:// 프로토콜 직접 접근 시 안내
-						if (window.location.protocol === "file:") {
-							setError("로컬 파일(file://) 환경에서는 fetch가 차단됩니다. 로컬 웹 서버(python -m http.server 등)를 실행해 주세요.");
-							return;
-						}
-
-						setLoading(true);
-						setError(null);
-
-						try {
-							const response = await fetch(item.file);
-							if (!response.ok) {
-								throw new Error(`'${item.file}' 파일을 찾을 수 없습니다. (상태 코드: ${response.status})`);
-							}
-							const htmlText = await response.text();
-							setPagesCache((prev) => ({ ...prev, [tabId]: htmlText }));
-						} catch (err) {
-							setError(err.message || "페이지를 불러오는 중 오류가 발생했습니다.");
-						} finally {
+				useEffect(() => {
+					setLoading(true);
+					fetch(`/api/weather/dashboard?stn=${station}`)
+						.then((res) => res.json())
+						.then((data) => {
+							setStats(data);
 							setLoading(false);
-						}
-					},
-					[pagesCache],
-				);
-
-				// 메뉴 변경 시 fetch 실행
-				useEffect(() => {
-					loadPageContent(activeMenu);
-				}, [activeMenu, loadPageContent]);
-
-				// Lucide 아이콘 렌더링 갱신
-				useEffect(() => {
-					if (window.lucide) {
-						window.lucide.createIcons();
-					}
-				});
+						})
+						.catch((err) => {
+							console.error(err);
+							setLoading(false);
+						});
+				}, [station]);
 
 				return (
-					<div>
-						<Navbar activeMenu={activeMenu} setActiveMenu={setActiveMenu} onMenuToggle={() => setMobileOpen(true)} />
-						<MobileMenu isOpen={mobileOpen} activeMenu={activeMenu} setActiveMenu={setActiveMenu} onClose={() => setMobileOpen(false)} />
-						<MainContent activeMenu={activeMenu} pageHtml={pagesCache[activeMenu]} loading={loading} error={error} />
+					<div className="min-h-screen flex flex-col">
+						{/* GNB */}
+						<nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+							<div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+								<div className="flex justify-between items-center h-14">
+									<div className="flex items-center gap-8">
+										<span className="text-lg font-black text-brand-600 tracking-tight">WeatherLoad</span>
+										<div className="hidden sm:flex space-x-6">
+											<a href="/" className="text-brand-600 border-brand-600 px-1 py-4 border-b-2 text-sm font-bold transition">
+												홈 (대시보드)
+											</a>
+											<a href="/data.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
+												1. 데이터 수집
+											</a>
+											<a href="/eda.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
+												2. 탐색적 분석(EDA)
+											</a>
+											<a href="/predict.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
+												3. 시계열 예측
+											</a>
+											<a href="/report.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
+												4. 종합 리포트
+											</a>
+										</div>
+									</div>
+								</div>
+							</div>
+						</nav>
+
+						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+							{/* 상단 타이틀 및 관측소 선택 */}
+							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+								<div>
+									<h1 className="text-xl font-bold text-slate-900">기상 데이터 및 에너지 부하 운영 대시보드</h1>
+									<p className="text-xs sm:text-sm text-slate-500 mt-0.5">실시간 데이터 수집 상태와 파이프라인 무결성을 모니터링합니다.</p>
+								</div>
+								<div className="flex items-center gap-3">
+									<label className="text-xs font-semibold text-slate-600">기준 관측소:</label>
+									<select value={station} onChange={(e) => setStation(e.target.value)} className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-1.5 font-bold focus:ring-2 focus:ring-brand-500 outline-none">
+										{STATIONS.map((s) => (
+											<option key={s.id} value={s.id}>
+												{s.name} ({s.id})
+											</option>
+										))}
+									</select>
+								</div>
+							</div>
+
+							{/* 스마트 폴백 상태 배너 (오늘 데이터 없을 때 안내) */}
+							{stats && stats.is_fallback && (
+								<div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-900 animate-fade-in">
+									<Icon name="alert-circle" className="w-5 h-5 text-amber-600 flex-shrink-0" />
+									<div className="text-xs sm:text-sm">
+										<b>실시간 집계 대기 중 안내:</b> 오늘({stats.today_str}) 실시간 기상 데이터가 아직 모두 집계되지 않아, 가장 최근 데이터가 완비된 <b>[{stats.active_date}]</b> 기준으로 대시보드 요약 정보를 대체하여 표시합니다.
+									</div>
+								</div>
+							)}
+
+							{loading ? (
+								<div className="py-24 text-center text-slate-400 font-bold">시스템 상태 통계를 불러오는 중입니다...</div>
+							) : (
+								stats && (
+									<div className="space-y-6 animate-fade-in">
+										{/* 1. 수집 통계 및 실적 요약 KPI 카드 */}
+										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-brand-500">
+												<span className="text-xs font-medium text-slate-500">오늘 실시간 수집 현황</span>
+												<div className="text-2xl font-bold text-slate-900 mt-1">
+													{stats.today_collected_hours} <span className="text-sm font-normal text-slate-400">/ 24 시간</span>
+												</div>
+												<div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
+													<div className="bg-brand-500 h-full rounded-full" style={{ width: `${(stats.today_collected_hours / 24) * 100}%` }}></div>
+												</div>
+											</div>
+
+											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-emerald-500">
+												<span className="text-xs font-medium text-slate-500">데이터베이스 누적 적재</span>
+												<div className="text-2xl font-bold text-slate-900 mt-1">
+													{stats.total_records.toLocaleString()} <span className="text-sm font-normal text-slate-400">Records</span>
+												</div>
+												<p className="mt-2 text-xs text-emerald-600 font-semibold flex items-center gap-1">
+													<Icon name="check-circle" className="w-3.5 h-3.5" /> 파이프라인 정상 가동 중
+												</p>
+											</div>
+
+											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+												<span className="text-xs font-medium text-slate-500">기준일({stats.active_date}) 평균 기온</span>
+												<div className="text-2xl font-bold text-rose-600 mt-1">
+													{stats.summary.avg_ta} <span className="text-sm font-normal text-rose-400">℃</span>
+												</div>
+												<p className="mt-2 text-xs text-slate-400">평균 습도: {stats.summary.avg_hm}%</p>
+											</div>
+
+											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+												<span className="text-xs font-medium text-slate-500">기준일 총 추정 부하</span>
+												<div className="text-2xl font-bold text-slate-900 mt-1">
+													{stats.summary.total_load.toLocaleString()} <span className="text-sm font-normal text-slate-400">kW</span>
+												</div>
+												<p className="mt-2 text-xs text-slate-400">분석 시간: {stats.summary.hours}시간 집계</p>
+											</div>
+										</div>
+
+										{/* 2. 빠른 메뉴 이동 카드 */}
+										<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+											<a href="/data.html" className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:border-brand-300 hover:shadow-md transition group flex flex-col justify-between">
+												<div>
+													<div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center font-bold mb-4">01</div>
+													<h3 className="font-bold text-slate-900 text-lg group-hover:text-brand-600 transition">데이터 수집 및 정제</h3>
+													<p className="text-xs text-slate-500 mt-1 leading-relaxed">기상청 API 연동, 결측치 자동 대치(Audit Trail), 달력 형태의 일별 수집 현황 조회</p>
+												</div>
+												<div className="mt-6 flex items-center gap-1 text-xs font-bold text-brand-600">
+													수집 관리로 이동 <Icon name="arrow-right" className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+												</div>
+											</a>
+
+											<a href="/eda.html" className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:border-brand-300 hover:shadow-md transition group flex flex-col justify-between">
+												<div>
+													<div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold mb-4">02</div>
+													<h3 className="font-bold text-slate-900 text-lg group-hover:text-purple-600 transition">탐색적 분석 (EDA)</h3>
+													<p className="text-xs text-slate-500 mt-1 leading-relaxed">기온, 습도, 일조량 간의 상관관계 분석 및 파생 지표(불쾌지수, 냉난방도일) 시각화</p>
+												</div>
+												<div className="mt-6 flex items-center gap-1 text-xs font-bold text-purple-600">
+													EDA 분석으로 이동 <Icon name="arrow-right" className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+												</div>
+											</a>
+
+											<a href="/predict.html" className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:border-brand-300 hover:shadow-md transition group flex flex-col justify-between">
+												<div>
+													<div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-4">03</div>
+													<h3 className="font-bold text-slate-900 text-lg group-hover:text-amber-600 transition">시계열 부하 예측</h3>
+													<p className="text-xs text-slate-500 mt-1 leading-relaxed">Prophet, SARIMA 모델 기반 백테스팅 수행 및 향후 24h~7d 미래 피크 부하 예측</p>
+												</div>
+												<div className="mt-6 flex items-center gap-1 text-xs font-bold text-amber-600">
+													예측 모델로 이동 <Icon name="arrow-right" className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+												</div>
+											</a>
+										</div>
+
+										{/* 3. 관측소별 파이프라인 수집 상태 요약 테이블 */}
+										<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+											<h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+												<Icon name="database" className="text-slate-500" /> 전국 주요 관측소 데이터 적재 현황
+											</h3>
+											<div className="overflow-x-auto border border-slate-200 rounded-xl">
+												<table className="w-full text-xs text-center border-collapse">
+													<thead className="bg-slate-100 text-slate-600 font-bold">
+														<tr>
+															<th className="py-2.5 px-3 border-b border-r border-slate-200">관측소 ID</th>
+															<th className="py-2.5 px-3 border-b border-r border-slate-200">지역명</th>
+															<th className="py-2.5 px-3 border-b border-r border-slate-200">최근 수집 시각</th>
+															<th className="py-2.5 px-3 border-b border-slate-200">누적 수집 건수</th>
+														</tr>
+													</thead>
+													<tbody className="divide-y divide-slate-100">
+														{STATIONS.map((s) => {
+															const stat = stats.stations_status.find((x) => x.stn_id === s.id);
+															return (
+																<tr key={s.id} className="hover:bg-slate-50 transition">
+																	<td className="py-2.5 px-3 border-r border-slate-100 font-mono font-bold text-slate-700">{s.id}</td>
+																	<td className="py-2.5 px-3 border-r border-slate-100 font-bold">{s.name}</td>
+																	<td className="py-2.5 px-3 border-r border-slate-100 text-slate-600">{stat ? stat.last_tm : "데이터 없음"}</td>
+																	<td className="py-2.5 px-3 font-semibold text-brand-600">{stat ? `${stat.count.toLocaleString()} 시간` : "0 시간"}</td>
+																</tr>
+															);
+														})}
+													</tbody>
+												</table>
+											</div>
+										</div>
+									</div>
+								)
+							)}
+						</div>
 					</div>
 				);
 			}
 
-			ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+			ReactDOM.createRoot(document.getElementById("root")).render(<MainDashboard />);
 		</script>
 	</body>
 </html>

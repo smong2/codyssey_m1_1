@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from src.lib.db import init_db
-from src.api import collect, view, eda, predict, report  # report 추가
+from src.api import collect, view, eda, predict, report, dashboard
 
 app = FastAPI(title="WeatherLoad API")
 
@@ -10,11 +10,12 @@ app = FastAPI(title="WeatherLoad API")
 init_db()
 
 # 모듈화된 API 라우터 등록
+app.include_router(dashboard.router, prefix="/api/weather", tags=["Dashboard"])
 app.include_router(collect.router, prefix="/api/weather", tags=["Collect"])
 app.include_router(view.router, prefix="/api/weather", tags=["View"])
 app.include_router(eda.router, prefix="/api/weather", tags=["EDA"])
 app.include_router(predict.router, prefix="/api/weather", tags=["Predict"])
-app.include_router(report.router, prefix="/api/weather", tags=["Report"]) # 신규 라우터 등록
+app.include_router(report.router, prefix="/api/weather", tags=["Report"])
 
 # 프론트엔드 HTML 서빙
 @app.get("/data.html")
@@ -29,7 +30,7 @@ async def read_eda():
 async def read_predict():
     return FileResponse("src/predict.html")
 
-@app.get("/report.html") # 리포트 페이지 서빙
+@app.get("/report.html")
 async def read_report():
     return FileResponse("src/report.html")
 

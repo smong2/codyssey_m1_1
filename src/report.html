@@ -3,6 +3,8 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+		<meta http-equiv="Pragma" content="no-cache" />
 		<title>종합 예측 리포트 | WeatherLoad</title>
 
 		<script src="https://cdn.tailwindcss.com"></script>
@@ -302,31 +304,6 @@
 
 				return (
 					<div className="min-h-screen flex flex-col">
-						{/* ─── 상단 GNB ─── */}
-						<nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm no-print">
-							<div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-								<div className="flex justify-between items-center h-14">
-									<div className="flex items-center gap-8">
-										<span className="text-lg font-black text-brand-600 tracking-tight">WeatherLoad</span>
-										<div className="hidden sm:flex space-x-6">
-											<a href="/data.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
-												1. 데이터 수집
-											</a>
-											<a href="/eda.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
-												2. 탐색적 분석(EDA)
-											</a>
-											<a href="/predict.html" className="text-slate-500 hover:text-slate-900 px-1 py-4 border-b-2 border-transparent text-sm font-bold transition">
-												3. 시계열 예측 모델링
-											</a>
-											<a href="/report.html" className="text-brand-600 border-brand-600 px-1 py-4 border-b-2 text-sm font-bold transition">
-												4. 종합 분석 리포트
-											</a>
-										</div>
-									</div>
-								</div>
-							</div>
-						</nav>
-
 						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 flex flex-col lg:flex-row gap-6 items-start">
 							{/* ─── 좌측 사이드바 (Z-index 및 모바일 겹침 문제 해결) ─── */}
 							<aside className="w-full lg:w-[300px] flex-shrink-0 flex flex-col gap-4 lg:sticky lg:top-24 lg:z-20 no-print">
