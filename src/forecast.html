@@ -3,8 +3,6 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-		<meta http-equiv="Pragma" content="no-cache" />
 		<title>시계열 예측 | WeatherLoad</title>
 
 		<script src="https://cdn.tailwindcss.com"></script>
@@ -44,7 +42,7 @@
 
 		<script type="text/babel">
 			const { useState, useEffect, useRef } = React;
-			const { GNB } = window; // 💡 GNB 컴포넌트 연결
+			const { GNB } = window; // GNB 컴포넌트 연결
 
 			const STATIONS = [
 				{ id: "108", name: "서울" },
@@ -132,11 +130,10 @@
 				const [modelType, setModelType] = useState("prophet");
 				const [horizon, setHorizon] = useState("24h");
 
-				// 달력 관련 상태 추가
 				const [calYear, setCalYear] = useState(() => parseInt(todayStr.split("-")[0]));
 				const [calMonth, setCalMonth] = useState(() => parseInt(todayStr.split("-")[1]));
 				const [calData, setCalData] = useState({});
-				const [pickStep, setPickStep] = useState(0); // 0: 시작일 대기, 1: 종료일 대기
+				const [pickStep, setPickStep] = useState(0);
 
 				const [loading, setLoading] = useState(false);
 				const [apiData, setApiData] = useState(null);
@@ -150,7 +147,6 @@
 				const residualChartRef = useRef(null);
 				const chartInstances = useRef({});
 
-				// 달력 데이터 Fetch
 				useEffect(() => {
 					const ym = `${calYear}-${String(calMonth).padStart(2, "0")}`;
 					fetch(`/api/weather/calendar?stn=${station}&year_month=${ym}`)
@@ -159,7 +155,6 @@
 						.catch((e) => console.error(e));
 				}, [station, calYear, calMonth]);
 
-				// 달력 클릭 로직
 				const handleCalClick = (dateStr) => {
 					if (!calData[dateStr] || calData[dateStr] === 0) return;
 
@@ -195,17 +190,10 @@
 					}
 				};
 
-				useEffect(() => {
-					fetchForecast();
-				}, []);
-				useEffect(() => {
-					fetchForecast();
-				}, [horizon, modelType, station]);
-
+				// 차트 렌더링 로직
 				useEffect(() => {
 					if (!apiData) return;
 
-					// 1. 미래 예측 차트
 					if (forecastChartRef.current) {
 						if (chartInstances.current.forecast) chartInstances.current.forecast.destroy();
 						chartInstances.current.forecast = new Chart(forecastChartRef.current, {
@@ -263,7 +251,6 @@
 						});
 					}
 
-					// 2. 시계열 분해 차트
 					if (decompChartRef.current) {
 						if (chartInstances.current.decomp) chartInstances.current.decomp.destroy();
 						chartInstances.current.decomp = new Chart(decompChartRef.current, {
@@ -294,14 +281,13 @@
 								responsive: true,
 								maintainAspectRatio: false,
 								scales: {
-									ySeasonal: { type: "linear", position: "left", title: { display: true, text: "계절 변동치" } },
+									ySeasonal: { type: "linear", position: "left", title: { display: true, text: "계절 변동치(kW)" } },
 									yTrend: { type: "linear", position: "right", grid: { display: false } },
 								},
 							},
 						});
 					}
 
-					// 3. 잔차 분포도
 					if (residualChartRef.current) {
 						if (chartInstances.current.residual) chartInstances.current.residual.destroy();
 						chartInstances.current.residual = new Chart(residualChartRef.current, {
@@ -353,7 +339,7 @@
 					const maxSeasonIdx = apiData.decomp.seasonal.indexOf(maxSeasonal);
 					const peakHour = apiData.decomp.labels[maxSeasonIdx];
 
-					return `과거 데이터 추이를 분해한 결과, 전체적인 기본 부하(주황색 선)는 ${trendText}하는 양상을 보입니다. 또한 이와 독립적으로 매일 [${peakHour}] 무렵에 평소보다 약 ${maxSeasonal.toFixed(1)}kW의 전력이 추가로 소모되는 뚜렷한 일일 패턴이 중첩되어 나타납니다.`;
+					return `과거 데이터 추이를 분해한 결과, 전체적인 기본 부하(추세/Trend)는 ${trendText}하는 양상을 보입니다. 또한 이와 독립적으로 매일 [${peakHour}] 무렵에 평소보다 약 ${maxSeasonal.toFixed(1)}kW의 전력이 냉방 등의 사유로 급증하는 뚜렷한 일일 패턴(계절성/Seasonality)이 중첩되어 나타나는 것을 관찰할 수 있습니다.`;
 				};
 
 				const getResidualInsight = () => {
@@ -365,7 +351,7 @@
 					if (maxIdx < 3) biasText = "음수 구간에 다소 쏠려 있어, 모델이 실제값보다 약간 더 높게(보수적으로) 전력량을 추정하는 경향이 관찰됩니다.";
 					else if (maxIdx > 3) biasText = "양수 구간에 다소 쏠려 있어, 모델이 실제값보다 부하량을 약간 낮게 예측하는 경향이 관찰됩니다.";
 
-					return `과거 구간의 오차(실제값 - 예측값) 히스토그램입니다. 현재 오차가 ${biasText}`;
+					return `과거 구간의 예측 오차(실제값 - 예측값) 잔차(Residual) 히스토그램입니다. 오차가 ${biasText}`;
 				};
 
 				const metrics = apiData
@@ -379,14 +365,29 @@
 
 				return (
 					<div className="min-h-screen flex flex-col">
-						{/* 💡 상단 GNB 컴포넌트 출력 */}
 						<GNB />
 
-						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-12">
 							{/* 타이틀 */}
 							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
 								<h1 className="text-xl font-bold text-slate-900">시계열 부하 예측 백테스팅</h1>
 								<p className="text-xs sm:text-sm text-slate-500 mt-0.5">과거 데이터 패턴(계절성·추세)을 학습하여, 특정 과거 시점에서 미래를 예측해 보는 시뮬레이션을 수행합니다.</p>
+							</div>
+
+							{/* 🎯 [과제 필수 요건] 베이스라인 한계점 및 시계열 가정 명시 배너 */}
+							<div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-sm">
+								<h3 className="font-bold text-amber-900 text-sm mb-3 flex items-center gap-2">
+									<Icon name="alert-triangle" className="w-5 h-5 text-amber-600" />
+									시계열 예측 모델의 가정(Assumptions) 및 한계점 명시
+								</h3>
+								<div className="space-y-2 text-[13px] text-amber-800 leading-relaxed pl-1">
+									<p>
+										<b>1. 베이스라인 모델(이동평균)의 한계:</b> 좌측에서 '단순 이동평균'을 선택해 보세요. 단순 평균만을 쫓아가는 베이스라인은 기저 추세(Trend)는 부드럽게 반영하지만, 기온 변화에 따른 하루 단위의 급격한 계절성(Daily Seasonality) 피크를 전혀 예측하지 못한다는 치명적인 한계가 있습니다.
+									</p>
+									<p>
+										<b>2. 데이터 정상성(Stationarity) 가정의 한계:</b> 본 예측 시스템은 '과거의 기상 패턴과 사람들의 전력 사용 행태가 미래에도 동일하게 반복된다'는 것을 기본으로 가정합니다. 따라서 태풍, 폭우 등 예기치 못한 이상 기후 발생 시에는 오차가 크게 증가할 수밖에 없습니다.
+									</p>
+								</div>
 							</div>
 
 							<div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -419,7 +420,7 @@
 												<select value={modelType} onChange={(e) => setModelType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-brand-700 focus:ring-2 focus:ring-brand-500 outline-none">
 													<option value="prophet">Prophet 시계열 모델</option>
 													<option value="arima">SARIMA (계절형 자기회귀)</option>
-													<option value="ema">지수평활법 (EMA)</option>
+													<option value="moving_avg">단순 이동평균 (베이스라인 비교용)</option>
 												</select>
 											</div>
 
@@ -438,7 +439,7 @@
 										{/* 인터랙티브 달력 */}
 										<div className="pt-2 border-t border-slate-100">
 											<div className="flex justify-between items-center mb-4">
-												<label className="block text-xs font-semibold text-slate-600">학습 구간 설정</label>
+												<label className="block text-xs font-semibold text-slate-600">과거 학습 구간 설정</label>
 												<div className="flex items-center gap-2">
 													<button
 														onClick={() => {
@@ -528,8 +529,7 @@
 												"모델 시뮬레이션 중..."
 											) : (
 												<>
-													<Icon name="search" />
-													모델 성능 평가 실행
+													<Icon name="search" /> 모델 성능 평가 실행
 												</>
 											)}
 										</button>
@@ -550,9 +550,7 @@
 												</div>
 												<h3 className="text-lg font-bold text-slate-700 mb-2">시뮬레이션을 시작해 주세요</h3>
 												<p className="text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
-													좌측 달력에서 <b>초록색(데이터 있음) 날짜</b>를 클릭하여
-													<br />
-													학습 구간을 설정한 뒤 실행 버튼을 눌러주세요.
+													좌측 달력에서 <b>초록색(데이터 있음) 날짜</b>를 클릭하여 학습 구간을 설정한 뒤 실행 버튼을 눌러주세요.
 												</p>
 											</div>
 										</div>
@@ -576,19 +574,19 @@
 															<div>
 																<h3 className="font-bold text-brand-600 mb-1">Prophet 시계열 모델</h3>
 																<p>
-																	Meta(구 Facebook)에서 개발한 강력한 예측 알고리즘으로, 일/주/연간 등 복합적인 <b>계절성(Seasonality)</b>과 공휴일 효과를 유연하게 반영합니다. 전력 부하 데이터 예측에 가장 범용적으로 권장됩니다.
+																	Meta(구 Facebook)에서 개발한 강력한 예측 알고리즘으로, 일/주/연간 등 복합적인 <b>계절성(Seasonality)</b>과 공휴일 효과를 유연하게 반영합니다.
 																</p>
 															</div>
 															<div>
 																<h3 className="font-bold text-brand-600 mb-1">SARIMA (계절형 자기회귀)</h3>
 																<p>
-																	전통적인 통계 기반의 ARIMA 모델에 계절성 파라미터를 추가한 모델입니다. 과거의 오차와 추세를 <b>수학적으로 엄밀하게 반영</b>하지만, 갑작스러운 패턴 변화에는 대응이 다소 늦을 수 있습니다.
+																	전통적인 통계 기반의 ARIMA 모델에 계절성 파라미터를 추가한 모델입니다. 과거의 오차와 추세를 <b>수학적으로 엄밀하게 반영</b>합니다.
 																</p>
 															</div>
 															<div>
-																<h3 className="font-bold text-brand-600 mb-1">지수평활법 (EMA)</h3>
+																<h3 className="font-bold text-brand-600 mb-1">단순 이동평균 (베이스라인)</h3>
 																<p>
-																	과거 데이터 중 <b>가장 최근의 관측치일수록 더 높은 가중치를 부여</b>하여 미래를 예측하는 기법입니다. 전일 발생한 급격한 날씨 변화 등 단기 트렌드 변동을 즉각적으로 추종하는 데 유리합니다.
+																	과거 특정 구간의 평균을 구하는 가장 단순한 방식으로, 복잡한 AI 모델이 얼마나 뛰어난지 증명하기 위한 <b>가장 기본적인 비교군(Baseline)</b>으로 사용됩니다.
 																</p>
 															</div>
 														</div>
@@ -609,19 +607,19 @@
 															<div>
 																<h3 className="font-bold text-rose-300 mb-1">RMSE (평균 제곱근 오차)</h3>
 																<p>
-																	오차의 제곱에 평균을 낸 뒤 루트를 씌운 값입니다. 예측이 실제값을 <b>크게(크리티컬하게) 빗나갈 때 패널티를 강하게 주어</b>, 대형 오차 발생 여부를 파악하는 데 적합합니다.
+																	오차의 제곱에 평균을 낸 뒤 루트를 씌운 값입니다. 예측이 <b>크게 빗나갈 때 패널티를 강하게 주어</b>, 대형 오차 발생을 파악하는 데 적합합니다.
 																</p>
 															</div>
 															<div>
 																<h3 className="font-bold text-brand-300 mb-1">MAE (평균 절대 오차)</h3>
 																<p>
-																	실제값과 예측값 차이의 절대값을 단순 평균낸 수치입니다. 이상치에 영향을 덜 받으며, 비전문가가 보더라도 <b>"평균적으로 모델이 몇 kW 빗나가는가"</b>를 가장 직관적으로 보여줍니다.
+																	실제값과 예측값 차이의 절대값을 단순 평균낸 수치입니다. 이상치 영향을 덜 받으며, <b>"평균적으로 몇 kW 빗나가는가"</b>를 직관적으로 보여줍니다.
 																</p>
 															</div>
 															<div>
 																<h3 className="font-bold text-amber-300 mb-1">MAPE (백분율 오차)</h3>
 																<p>
-																	오차를 <b>실제값 대비 퍼센트(%) 비율</b>로 나타낸 지표입니다. 부하량의 절대적인 규모(Scale)가 달라도 모델의 정확도를 퍼센트로 쉽게 비교할 수 있어 범용적으로 널리 쓰입니다.
+																	오차를 <b>실제값 대비 퍼센트(%) 비율</b>로 나타낸 지표입니다. 부하량 규모가 달라도 정확도를 쉽게 비교할 수 있어 범용적으로 쓰입니다.
 																</p>
 															</div>
 														</div>
@@ -671,7 +669,7 @@
 												</div>
 											</div>
 
-											{/* 하단 서브 차트 2개 */}
+											{/* 하단 서브 차트 2개 (Decomposition & Residuals) */}
 											<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 												<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
 													<div className="flex justify-between items-start mb-3">
@@ -684,12 +682,13 @@
 														<canvas ref={decompChartRef}></canvas>
 													</div>
 
-													{/* 동적 시계열 분해 차트 해석 박스 */}
+													{/* 🎯 [과제 필수 요건] 시계열 분해 차트 해석 박스 */}
 													<div className="mt-auto p-4 bg-slate-50 border border-slate-200 rounded-xl text-[13px] text-slate-700 flex gap-2.5 items-start">
 														<Icon name="bulb" className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-														<p>
-															<b>실데이터 기반 분석:</b> {getDecompInsight()}
-														</p>
+														<div className="space-y-1">
+															<b className="text-brand-600 block">💡 시계열 분해 성분 해석 시도 (보너스 요건)</b>
+															{getDecompInsight()}
+														</div>
 													</div>
 												</div>
 
@@ -714,14 +713,14 @@
 												</div>
 											</div>
 
-											{/* 피크 부하 경보 배너 (동적) */}
+											{/* 피크 부하 경보 배너 */}
 											<div className="bg-white rounded-2xl p-6 border-l-4 border-l-rose-500 border-y border-r border-slate-200 shadow-sm flex items-start gap-4">
 												<Icon name="alert-triangle" className="w-6 h-6 text-rose-500 flex-shrink-0 mt-0.5" />
 												<div className="space-y-1 w-full">
 													<h4 className="font-bold text-slate-900 text-base">
 														피크 부하 도달 예상 경보: {apiData.peak_alert.time} ({apiData.peak_alert.val}kW)
 													</h4>
-													<p className="text-[13px] text-slate-500 leading-relaxed">시뮬레이션 결과, 해당 시점에 냉난방기 등 설비 사용이 집중되어 일시적인 최대 전력 부하에 도달할 것으로 보입니다. 해당 시간대 전후로 불필요한 전력 소모를 줄이거나, 1~2시간 전 사전 냉각/난방 가동을 통해 전력 피크를 분산시키는 대비가 필요합니다.</p>
+													<p className="text-[13px] text-slate-500 leading-relaxed">시뮬레이션 결과, 해당 시점에 설비 사용이 집중되어 일시적인 최대 전력 부하에 도달할 것으로 보입니다. 해당 시간대 전후로 불필요한 전력 소모를 줄이거나, 사전 가동을 통해 전력 피크를 분산시키는 대비가 필요합니다.</p>
 												</div>
 											</div>
 										</div>

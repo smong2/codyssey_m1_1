@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>WeatherLoad | 기상 부하 예측 대시보드</title>
+		<title>WeatherLoad | 기상 부하 예측 탐색형 대시보드</title>
 
 		<script src="https://cdn.tailwindcss.com"></script>
 		<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -78,21 +78,37 @@
 							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
 						</svg>
 					);
+				if (name === "bar-chart")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 20V10M12 20V4M6 20v-6" />
+						</svg>
+					);
 				return null;
 			}
 
 			function MainDashboard() {
+				// 기본 기간: 일주일 전 ~ 오늘
+				const kstOffset = 9 * 60;
+				const kstNow = new Date(new Date().getTime() + kstOffset * 60 * 1000);
+				const prevWeek = new Date(kstNow.getTime() - 7 * 24 * 60 * 60 * 1000);
+				const todayStr = kstNow.toISOString().split("T")[0];
+				const startStr = prevWeek.toISOString().split("T")[0];
+
 				const [station, setStation] = useState("108");
+				const [startDate, setStartDate] = useState(startStr);
+				const [endDate, setEndDate] = useState(todayStr);
+
 				const [stats, setStats] = useState(null);
 				const [loading, setLoading] = useState(true);
 
-				const stationChartRef = useRef(null);
+				const trendChartRef = useRef(null);
 				const chartInstance = useRef(null);
 
-				// 데이터 패치
-				useEffect(() => {
+				// 동적 탐색 데이터 패치
+				const fetchDashboardStats = () => {
 					setLoading(true);
-					fetch(`/api/weather/dashboard?stn=${station}`)
+					fetch(`/api/weather/dashboard-stats?stn=${station}&startDate=${startDate}&endDate=${endDate}`)
 						.then((res) => res.json())
 						.then((data) => {
 							setStats(data);
@@ -102,38 +118,57 @@
 							console.error(err);
 							setLoading(false);
 						});
-				}, [station]);
+				};
 
-				// 가로형 막대그래프 렌더링
+				// 조건(지역, 날짜)이 바뀔 때마다 데이터를 새로 가져옵니다.
 				useEffect(() => {
-					if (!stats || !stationChartRef.current) return;
+					fetchDashboardStats();
+				}, [station, startDate, endDate]);
+
+				// 사용자 조건에 맞게 실시간 렌더링되는 탐색형 차트
+				useEffect(() => {
+					if (!stats || !stats.daily_trend || !trendChartRef.current) return;
 					if (chartInstance.current) chartInstance.current.destroy();
 
-					const labels = STATIONS.map((s) => s.name);
-					const data = STATIONS.map((s) => {
-						const st = stats.stations_status.find((x) => x.stn_id === s.id);
-						return st ? st.count : 0;
-					});
+					const labels = stats.daily_trend.map((d) => d.ymd.substring(5)); // MM-DD
+					const taData = stats.daily_trend.map((d) => d.daily_ta);
+					const loadData = stats.daily_trend.map((d) => d.daily_load);
 
-					chartInstance.current = new Chart(stationChartRef.current, {
+					chartInstance.current = new Chart(trendChartRef.current, {
 						type: "bar",
 						data: {
 							labels: labels,
 							datasets: [
 								{
-									label: "누적 데이터 수집량 (시간)",
-									data: data,
-									backgroundColor: "rgba(59, 130, 246, 0.8)",
+									type: "line",
+									label: "일 평균 기온(℃)",
+									data: taData,
+									borderColor: "#ef4444",
+									backgroundColor: "#ef4444",
+									yAxisID: "yTa",
+									tension: 0.3,
+									borderWidth: 2,
+									pointRadius: 3,
+								},
+								{
+									type: "bar",
+									label: "일일 총 부하량(kW)",
+									data: loadData,
+									backgroundColor: "rgba(59, 130, 246, 0.7)",
 									borderRadius: 4,
+									yAxisID: "yLoad",
 								},
 							],
 						},
 						options: {
 							responsive: true,
 							maintainAspectRatio: false,
-							indexAxis: "y", // 가로형 그래프로 변경
-							plugins: { legend: { display: false } },
-							scales: { x: { title: { display: true, text: "누적 수집 건수 (시간)" } } },
+							interaction: { mode: "index", intersect: false },
+							scales: {
+								x: { grid: { display: false } },
+								yLoad: { type: "linear", position: "left", title: { display: true, text: "부하량(kW)" } },
+								yTa: { type: "linear", position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "기온(℃)" } },
+							},
 						},
 					});
 				}, [stats]);
@@ -142,79 +177,95 @@
 					<div className="min-h-screen flex flex-col">
 						<GNB />
 
-						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-12">
+							{/* 상단 컨트롤 패널 (탐색적 분석 조건 변경 영역) */}
+							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
 								<div>
-									<h1 className="text-xl font-bold text-slate-900">기상 데이터 및 에너지 부하 운영 대시보드</h1>
-									<p className="text-xs sm:text-sm text-slate-500 mt-0.5">실시간 데이터 수집 상태와 파이프라인 무결성을 모니터링합니다.</p>
+									<h1 className="text-xl font-bold text-slate-900">시스템 모니터링 및 탐색형 대시보드</h1>
+									<p className="text-xs sm:text-sm text-slate-500 mt-0.5">분석 기간과 지역 조건을 자유롭게 변경하며 데이터 규모를 탐색합니다.</p>
 								</div>
-								<div className="flex items-center gap-3">
-									<label className="text-xs font-semibold text-slate-600">기준 관측소:</label>
-									<select value={station} onChange={(e) => setStation(e.target.value)} className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-1.5 font-bold focus:ring-2 focus:ring-brand-500 outline-none">
+
+								{/* 조건 변경 필터 - 사용자가 직접 탐색(Explore) 가능 */}
+								<div className="flex flex-wrap items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-inner">
+									<select value={station} onChange={(e) => setStation(e.target.value)} className="bg-white border border-slate-200 text-sm rounded-lg px-3 py-1.5 font-bold outline-none focus:ring-2 focus:ring-brand-500">
 										{STATIONS.map((s) => (
 											<option key={s.id} value={s.id}>
-												{s.name} ({s.id})
+												{s.name} ({s.id}) 관측소
 											</option>
 										))}
 									</select>
+									<span className="text-slate-300 hidden sm:inline">|</span>
+									<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-white border border-slate-200 text-sm rounded-lg px-2 py-1.5 font-bold outline-none focus:ring-2 focus:ring-brand-500" />
+									<span className="text-slate-400 font-bold hidden sm:inline">~</span>
+									<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-white border border-slate-200 text-sm rounded-lg px-2 py-1.5 font-bold outline-none focus:ring-2 focus:ring-brand-500" />
 								</div>
 							</div>
 
+							{/* 스마트 폴백 배너 */}
 							{stats && stats.is_fallback && (
 								<div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-900 animate-fade-in">
 									<Icon name="alert-circle" className="w-5 h-5 text-amber-600 flex-shrink-0" />
 									<div className="text-xs sm:text-sm">
-										<b>실시간 집계 대기 중 안내:</b> 오늘({stats.today_str}) 실시간 데이터가 아직 모두 집계되지 않아, 데이터가 완비된 <b>[{stats.active_date}]</b> 기준으로 대시보드 요약 정보를 표시합니다.
+										<b>실시간 집계 대기 중 안내:</b> 오늘({stats.today_str}) 실시간 데이터가 아직 모두 집계되지 않아, 데이터가 완비된 <b>[{stats.active_start}]</b> 기준으로 대시보드 요약 정보를 표시합니다.
 									</div>
 								</div>
 							)}
 
+							{/* 통계 및 시각화 */}
 							{loading ? (
-								<div className="py-24 text-center text-slate-400 font-bold">시스템 상태 통계를 불러오는 중입니다...</div>
+								<div className="py-24 text-center text-brand-600 font-bold animate-pulse">선택한 조건의 데이터를 분석 중입니다...</div>
 							) : (
 								stats && (
 									<div className="space-y-6 animate-fade-in">
-										{/* KPI 카드 */}
+										{/* 동적 KPI 카드 */}
 										<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-brand-500">
-												<span className="text-xs font-medium text-slate-500">오늘 실시간 수집 현황</span>
+												<span className="text-xs font-medium text-slate-500">선택 기간 수집된 데이터</span>
 												<div className="text-2xl font-bold text-slate-900 mt-1">
-													{stats.today_collected_hours} <span className="text-sm font-normal text-slate-400">/ 24 시간</span>
-												</div>
-												<div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
-													<div className="bg-brand-500 h-full rounded-full" style={{ width: `${(stats.today_collected_hours / 24) * 100}%` }}></div>
+													{stats.summary.hours} <span className="text-sm font-normal text-slate-400">Hours</span>
 												</div>
 											</div>
-
 											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-emerald-500">
-												<span className="text-xs font-medium text-slate-500">데이터베이스 누적 적재</span>
+												<span className="text-xs font-medium text-slate-500">시스템 전체 누적 적재량</span>
 												<div className="text-2xl font-bold text-slate-900 mt-1">
 													{stats.total_records.toLocaleString()} <span className="text-sm font-normal text-slate-400">Records</span>
 												</div>
-												<p className="mt-2 text-xs text-emerald-600 font-semibold flex items-center gap-1">
-													<Icon name="check-circle" className="w-3.5 h-3.5" /> 파이프라인 정상 가동 중
-												</p>
 											</div>
-
 											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-												<span className="text-xs font-medium text-slate-500">기준일({stats.active_date}) 평균 기온</span>
+												<span className="text-xs font-medium text-slate-500">해당 기간 평균 기온</span>
 												<div className="text-2xl font-bold text-rose-600 mt-1">
 													{stats.summary.avg_ta} <span className="text-sm font-normal text-rose-400">℃</span>
 												</div>
-												<p className="mt-2 text-xs text-slate-400">평균 습도: {stats.summary.avg_hm}%</p>
 											</div>
-
 											<div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-												<span className="text-xs font-medium text-slate-500">기준일 총 추정 부하</span>
+												<span className="text-xs font-medium text-slate-500">해당 기간 총 추정 부하</span>
 												<div className="text-2xl font-bold text-slate-900 mt-1">
 													{stats.summary.total_load.toLocaleString()} <span className="text-sm font-normal text-slate-400">kW</span>
 												</div>
-												<p className="mt-2 text-xs text-slate-400">분석 시간: {stats.summary.hours}시간 집계</p>
 											</div>
 										</div>
 
-										{/* 메뉴 이동 카드 */}
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+										{/* 동적 탐색형 차트 영역 */}
+										<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+											<div className="flex justify-between items-end mb-4">
+												<div>
+													<h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+														<Icon name="bar-chart" /> 선택 기간별 기온 및 전력 부하 동기화 추이
+													</h3>
+													<p className="text-xs text-slate-500 mt-1">상단 패널에서 기간과 관측소를 변경하면, 해당 조건에 맞는 데이터 흐름이 실시간으로 탐색(Explore)되어 시각화됩니다.</p>
+												</div>
+											</div>
+											{stats.daily_trend && stats.daily_trend.length > 0 ? (
+												<div className="h-72 w-full relative">
+													<canvas ref={trendChartRef}></canvas>
+												</div>
+											) : (
+												<div className="h-40 flex items-center justify-center text-slate-400 text-sm font-bold bg-slate-50 rounded-xl border border-dashed border-slate-200">해당 기간에 수집된 데이터가 없습니다. 상단에서 다른 날짜를 선택해주세요.</div>
+											)}
+										</div>
+
+										{/* 빠른 메뉴 이동 카드 */}
+										<div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-100">
 											<a href="/data.html" className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:border-brand-300 hover:shadow-md transition group flex flex-col justify-between">
 												<div>
 													<div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center font-bold mb-4">01</div>
@@ -247,16 +298,6 @@
 													예측 모델로 이동 <Icon name="arrow-right" className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
 												</div>
 											</a>
-										</div>
-
-										{/* 차트 렌더링 영역 */}
-										<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-											<h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-												<Icon name="database" className="text-slate-500 w-5 h-5" /> 전국 주요 관측소 데이터 적재 현황
-											</h3>
-											<div className="h-64 w-full relative">
-												<canvas ref={stationChartRef}></canvas>
-											</div>
 										</div>
 									</div>
 								)
