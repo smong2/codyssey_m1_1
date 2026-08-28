@@ -1,23 +1,18 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" class="notranslate" translate="no">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+		<meta http-equiv="Pragma" content="no-cache" />
 		<title>시계열 예측 | WeatherLoad</title>
 
-		<!-- Tailwind CSS CDN -->
 		<script src="https://cdn.tailwindcss.com"></script>
-		<!-- React & ReactDOM CDN -->
 		<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 		<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-		<!-- Babel (JSX 변환) -->
 		<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-		<!-- Lucide Icons -->
-		<script src="https://unpkg.com/lucide@latest"></script>
-		<!-- Chart.js CDN -->
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-		<!-- Pretendard 폰트 -->
 		<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
 		<style>
@@ -35,140 +30,220 @@
 				background: #cbd5e1;
 				border-radius: 3px;
 			}
-			::-webkit-scrollbar-track {
-				background: transparent;
-			}
 		</style>
 
 		<script>
-			tailwind.config = {
-				theme: {
-					extend: {
-						colors: {
-							brand: {
-								50: "#eff6ff",
-								100: "#dbeafe",
-								500: "#3b82f6",
-								600: "#2563eb",
-								700: "#1d4ed8",
-								900: "#1e3a8a",
-							},
-						},
-					},
-				},
-			};
+			tailwind.config = { theme: { extend: { colors: { brand: { 50: "#eff6ff", 100: "#dbeafe", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" } } } } };
 		</script>
+
+		<!-- 💡 공통 GNB 스크립트 로드 -->
+		<script type="text/babel" src="/gnb.js"></script>
 	</head>
-	<body class="bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
+	<body class="bg-slate-50 text-slate-800 notranslate" translate="no">
 		<div id="root"></div>
 
 		<script type="text/babel">
 			const { useState, useEffect, useRef } = React;
+			const { GNB } = window; // 💡 GNB 컴포넌트 연결
 
-			// 예측 성능 평가지표 (Evaluation Metrics)
-			const METRICS = [
-				{
-					title: "평균 절대 오차 (MAE)",
-					value: "0.42 kW",
-					desc: "실제 부하와 예측치의 평균 편차",
-					status: "우수",
-					badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-					icon: "check-circle",
-				},
-				{
-					title: "평균 제곱근 오차 (RMSE)",
-					value: "0.58 kW",
-					desc: "피크 구간 큰 오차에 민감한 지표",
-					status: "양호",
-					badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
-					icon: "activity",
-				},
-				{
-					title: "평균 절대 백분율 오차 (MAPE)",
-					value: "4.85%",
-					desc: "전체 부하량 대비 오차 비율 (5% 미만)",
-					status: "매우 우수",
-					badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
-					icon: "percent",
-				},
-				{
-					title: "피크 시점 일치율",
-					value: "92.3%",
-					desc: "최대 전력 수요 발생 시점(±1시간) 적중률",
-					status: "신뢰",
-					badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
-					icon: "target",
-				},
+			const STATIONS = [
+				{ id: "108", name: "서울" },
+				{ id: "112", name: "인천" },
+				{ id: "159", name: "부산" },
+				{ id: "143", name: "대구" },
+				{ id: "156", name: "광주" },
+				{ id: "133", name: "대전" },
 			];
 
+			function Icon({ name, className = "w-4 h-4" }) {
+				if (name === "check-circle")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					);
+				if (name === "activity")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+						</svg>
+					);
+				if (name === "percent")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M17 17h.01M5 19L19 5" />
+						</svg>
+					);
+				if (name === "target")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+						</svg>
+					);
+				if (name === "bulb")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+						</svg>
+					);
+				if (name === "layers")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+						</svg>
+					);
+				if (name === "chevron-down")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+						</svg>
+					);
+				if (name === "chevron-up")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" />
+						</svg>
+					);
+				if (name === "alert-triangle")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+						</svg>
+					);
+				if (name === "search")
+					return (
+						<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+						</svg>
+					);
+				return null;
+			}
+
 			function ForecastPage() {
+				const kstOffset = 9 * 60;
+				const kstNow = new Date(new Date().getTime() + kstOffset * 60 * 1000);
+				const prevWeek = new Date(kstNow.getTime() - 3 * 24 * 60 * 60 * 1000);
+				const todayStr = kstNow.toISOString().split("T")[0];
+				const startStr = prevWeek.toISOString().split("T")[0];
+
+				const [station, setStation] = useState("108");
+				const [startDate, setStartDate] = useState(startStr);
+				const [endDate, setEndDate] = useState(todayStr);
 				const [modelType, setModelType] = useState("prophet");
 				const [horizon, setHorizon] = useState("24h");
+
+				// 달력 관련 상태 추가
+				const [calYear, setCalYear] = useState(() => parseInt(todayStr.split("-")[0]));
+				const [calMonth, setCalMonth] = useState(() => parseInt(todayStr.split("-")[1]));
+				const [calData, setCalData] = useState({});
+				const [pickStep, setPickStep] = useState(0); // 0: 시작일 대기, 1: 종료일 대기
+
+				const [loading, setLoading] = useState(false);
+				const [apiData, setApiData] = useState(null);
+				const [error, setError] = useState(null);
+
+				const [isGuideOpen, setIsGuideOpen] = useState(false);
+				const [isModelGuideOpen, setIsModelGuideOpen] = useState(false);
 
 				const forecastChartRef = useRef(null);
 				const decompChartRef = useRef(null);
 				const residualChartRef = useRef(null);
+				const chartInstances = useRef({});
 
-				const forecastInstance = useRef(null);
-				const decompInstance = useRef(null);
-				const residualInstance = useRef(null);
+				// 달력 데이터 Fetch
+				useEffect(() => {
+					const ym = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+					fetch(`/api/weather/calendar?stn=${station}&year_month=${ym}`)
+						.then((r) => r.json())
+						.then((d) => setCalData(d))
+						.catch((e) => console.error(e));
+				}, [station, calYear, calMonth]);
+
+				// 달력 클릭 로직
+				const handleCalClick = (dateStr) => {
+					if (!calData[dateStr] || calData[dateStr] === 0) return;
+
+					if (pickStep === 0) {
+						setStartDate(dateStr);
+						setEndDate(dateStr);
+						setPickStep(1);
+					} else {
+						if (dateStr >= startDate) {
+							setEndDate(dateStr);
+							setPickStep(0);
+						} else {
+							setStartDate(dateStr);
+							setEndDate(dateStr);
+							setPickStep(1);
+						}
+					}
+				};
+
+				const fetchForecast = async () => {
+					setLoading(true);
+					setError(null);
+					try {
+						const res = await fetch(`/api/weather/forecast?stn=${station}&startDate=${startDate}&endDate=${endDate}&modelType=${modelType}&horizon=${horizon}`);
+						if (!res.ok) throw new Error("예측 데이터를 불러오지 못했습니다.");
+						const result = await res.json();
+						if (result.error) throw new Error("해당 기간의 과거 학습 데이터가 존재하지 않습니다.");
+						setApiData(result);
+					} catch (err) {
+						setError(err.message);
+					} finally {
+						setLoading(false);
+					}
+				};
 
 				useEffect(() => {
-					if (window.lucide) window.lucide.createIcons();
+					fetchForecast();
+				}, []);
+				useEffect(() => {
+					fetchForecast();
+				}, [horizon, modelType, station]);
 
-					// ── 1. 실제 부하 vs 예측 부하 (24시간~48시간 시계열) ──
+				useEffect(() => {
+					if (!apiData) return;
+
+					// 1. 미래 예측 차트
 					if (forecastChartRef.current) {
-						if (forecastInstance.current) forecastInstance.current.destroy();
-						const ctx1 = forecastChartRef.current.getContext("2d");
-
-						const timeline = ["D-1 12:00", "15:00", "18:00", "21:00", "00:00", "03:00", "06:00", "09:00", "오늘 12:00(현재)", "15:00", "18:00", "21:00", "00:00", "03:00", "06:00", "09:00", "내일 12:00"];
-
-						// 과거 실측치 (현재 시점 이후는 null)
-						const actualData = [7.8, 8.4, 6.2, 4.1, 2.8, 2.1, 3.0, 5.8, 7.9, null, null, null, null, null, null, null, null];
-
-						// 모델 예측치 (과거 구간은 적합선, 미래 구간은 예측선)
-						const forecastData = [7.5, 8.2, 6.0, 4.3, 2.6, 2.3, 3.2, 5.6, 7.9, 8.6, 6.8, 4.5, 2.9, 2.2, 3.4, 6.0, 8.3];
-
-						// 상한/하한 신뢰구간 (95% Confidence Interval)
-						const upperCI = [null, null, null, null, null, null, null, null, 7.9, 9.4, 7.6, 5.3, 3.6, 2.9, 4.2, 6.9, 9.2];
-						const lowerCI = [null, null, null, null, null, null, null, null, 7.9, 7.8, 6.0, 3.7, 2.2, 1.5, 2.6, 5.1, 7.4];
-
-						forecastInstance.current = new Chart(ctx1, {
+						if (chartInstances.current.forecast) chartInstances.current.forecast.destroy();
+						chartInstances.current.forecast = new Chart(forecastChartRef.current, {
 							type: "line",
 							data: {
-								labels: timeline,
+								labels: apiData.chart_main.labels,
 								datasets: [
 									{
 										label: "실측 부하 (Actual)",
-										data: actualData,
+										data: apiData.chart_main.actual,
 										borderColor: "#1e293b",
 										backgroundColor: "#1e293b",
 										borderWidth: 2.5,
-										pointRadius: 4,
+										pointRadius: 2,
 										tension: 0.2,
 									},
 									{
 										label: "예측 부하 (Forecast)",
-										data: forecastData,
+										data: apiData.chart_main.forecast,
 										borderColor: "#2563eb",
 										borderDash: [5, 5],
 										borderWidth: 2,
-										pointRadius: 3,
+										pointRadius: 1,
 										pointBackgroundColor: "#2563eb",
 										tension: 0.3,
 									},
 									{
 										label: "예측 상한선 (95% CI)",
-										data: upperCI,
+										data: apiData.chart_main.upper_ci,
 										borderColor: "rgba(37, 99, 235, 0.2)",
-										backgroundColor: "rgba(37, 99, 235, 0.08)",
+										backgroundColor: "rgba(37, 99, 235, 0.15)",
 										fill: "+1",
 										pointRadius: 0,
 										borderWidth: 1,
 									},
 									{
 										label: "예측 하한선 (95% CI)",
-										data: lowerCI,
+										data: apiData.chart_main.lower_ci,
 										borderColor: "rgba(37, 99, 235, 0.2)",
 										pointRadius: 0,
 										borderWidth: 1,
@@ -180,40 +255,25 @@
 								responsive: true,
 								maintainAspectRatio: false,
 								interaction: { mode: "index", intersect: false },
-								plugins: {
-									legend: { position: "top", align: "end" },
-								},
 								scales: {
-									y: {
-										beginAtZero: true,
-										title: { display: true, text: "냉난방 부하 (kW)" },
-										grid: { color: "#f1f5f9" },
-									},
-									x: {
-										grid: { display: false },
-									},
+									x: { ticks: { maxTicksLimit: 12 } },
+									y: { title: { display: true, text: "냉난방 부하 (kW)" } },
 								},
 							},
 						});
 					}
 
-					// ── 2. 시계열 분해 (추세 + 24시간 계절성) ──
+					// 2. 시계열 분해 차트
 					if (decompChartRef.current) {
-						if (decompInstance.current) decompInstance.current.destroy();
-						const ctx2 = decompChartRef.current.getContext("2d");
-
-						const decompHours = ["00시", "03시", "06시", "09시", "12시", "15시", "18시", "21시"];
-						const seasonalComponent = [-2.8, -3.4, -2.1, 1.4, 3.8, 4.2, 1.1, -1.9];
-						const trendComponent = [5.2, 5.2, 5.3, 5.3, 5.4, 5.5, 5.5, 5.6];
-
-						decompInstance.current = new Chart(ctx2, {
+						if (chartInstances.current.decomp) chartInstances.current.decomp.destroy();
+						chartInstances.current.decomp = new Chart(decompChartRef.current, {
 							type: "line",
 							data: {
-								labels: decompHours,
+								labels: apiData.decomp.labels,
 								datasets: [
 									{
-										label: "일주기 계절성 성분 (Seasonal)",
-										data: seasonalComponent,
+										label: "일주기 계절성 (Seasonal)",
+										data: apiData.decomp.seasonal,
 										borderColor: "#8b5cf6",
 										backgroundColor: "rgba(139, 92, 246, 0.1)",
 										fill: true,
@@ -221,8 +281,8 @@
 										yAxisID: "ySeasonal",
 									},
 									{
-										label: "기저 추세 성분 (Trend)",
-										data: trendComponent,
+										label: "기저 추세 (Trend)",
+										data: apiData.decomp.trend,
 										borderColor: "#f59e0b",
 										borderWidth: 2,
 										tension: 0.1,
@@ -233,43 +293,25 @@
 							options: {
 								responsive: true,
 								maintainAspectRatio: false,
-								plugins: {
-									legend: { position: "top", align: "end" },
-								},
 								scales: {
-									ySeasonal: {
-										type: "linear",
-										position: "left",
-										title: { display: true, text: "계절 변동치 (kW)" },
-										grid: { color: "#f1f5f9" },
-									},
-									yTrend: {
-										type: "linear",
-										position: "right",
-										title: { display: true, text: "추세 기저치 (kW)" },
-										grid: { display: false },
-										min: 4,
-										max: 7,
-									},
-									x: { grid: { display: false } },
+									ySeasonal: { type: "linear", position: "left", title: { display: true, text: "계절 변동치" } },
+									yTrend: { type: "linear", position: "right", grid: { display: false } },
 								},
 							},
 						});
 					}
 
-					// ── 3. 예측 잔차(Residual) 오차 분포 ──
+					// 3. 잔차 분포도
 					if (residualChartRef.current) {
-						if (residualInstance.current) residualInstance.current.destroy();
-						const ctx3 = residualChartRef.current.getContext("2d");
-
-						residualInstance.current = new Chart(ctx3, {
+						if (chartInstances.current.residual) chartInstances.current.residual.destroy();
+						chartInstances.current.residual = new Chart(residualChartRef.current, {
 							type: "bar",
 							data: {
-								labels: ["-1.0kW 이하", "-0.6kW", "-0.2kW", "0.0kW(완전일치)", "+0.2kW", "+0.6kW", "+1.0kW 이상"],
+								labels: ["-1.0 이하", "-0.6", "-0.2", "0.0(일치)", "+0.2", "+0.6", "+1.0 이상"],
 								datasets: [
 									{
-										label: "잔차 빈도수 (Residual Distribution)",
-										data: [12, 45, 142, 280, 155, 38, 8],
+										label: "잔차 빈도수",
+										data: apiData.residuals,
 										backgroundColor: "#38bdf8",
 										borderRadius: 6,
 									},
@@ -278,140 +320,414 @@
 							options: {
 								responsive: true,
 								maintainAspectRatio: false,
-								plugins: {
-									legend: { display: false },
-								},
-								scales: {
-									y: {
-										beginAtZero: true,
-										title: { display: true, text: "구간별 빈도(건)" },
-										grid: { color: "#f1f5f9" },
-									},
-									x: { grid: { display: false } },
-								},
+								plugins: { legend: { display: false } },
 							},
 						});
 					}
+				}, [apiData]);
 
-					return () => {
-						if (forecastInstance.current) forecastInstance.current.destroy();
-						if (decompInstance.current) decompInstance.current.destroy();
-						if (residualInstance.current) residualInstance.current.destroy();
-					};
-				}, [modelType, horizon]);
+				const generateCalendar = () => {
+					const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+					const firstDay = new Date(calYear, calMonth - 1, 1).getDay();
+					const grid = [];
+					for (let i = 0; i < firstDay; i++) grid.push(null);
+					for (let i = 1; i <= daysInMonth; i++) grid.push(`${calYear}-${String(calMonth).padStart(2, "0")}-${String(i).padStart(2, "0")}`);
+					return grid;
+				};
+
+				// ─── 동적 해석 (Insight) 생성 함수 ───
+				const getMainInsight = () => {
+					if (!apiData) return "";
+					const peakVal = apiData.peak_alert.val;
+					const peakTime = apiData.peak_alert.time;
+					return `[${endDate}] 시점을 가상의 현재로 두고, 향후 ${horizon.toUpperCase()} 동안의 전력 수요를 시뮬레이션한 결과입니다. 모델은 [${peakTime}] 전후로 최대 ${peakVal}kW의 부하가 발생할 것으로 강력하게 예측하고 있으며, 파란색 음영(95% 신뢰구간)이 좁은 것으로 보아 해당 예측의 확신도가 높음을 의미합니다.`;
+				};
+
+				const getDecompInsight = () => {
+					if (!apiData) return "";
+					const trendArr = apiData.decomp.trend;
+					const trendDiff = trendArr[trendArr.length - 1] - trendArr[0];
+					const trendText = trendDiff > 0 ? `점진적으로 우상향(+${trendDiff.toFixed(1)}kW)` : `안정적인 우하향(${trendDiff.toFixed(1)}kW)`;
+
+					const maxSeasonal = Math.max(...apiData.decomp.seasonal);
+					const maxSeasonIdx = apiData.decomp.seasonal.indexOf(maxSeasonal);
+					const peakHour = apiData.decomp.labels[maxSeasonIdx];
+
+					return `과거 데이터 추이를 분해한 결과, 전체적인 기본 부하(주황색 선)는 ${trendText}하는 양상을 보입니다. 또한 이와 독립적으로 매일 [${peakHour}] 무렵에 평소보다 약 ${maxSeasonal.toFixed(1)}kW의 전력이 추가로 소모되는 뚜렷한 일일 패턴이 중첩되어 나타납니다.`;
+				};
+
+				const getResidualInsight = () => {
+					if (!apiData) return "";
+					const maxCount = Math.max(...apiData.residuals);
+					const maxIdx = apiData.residuals.indexOf(maxCount);
+
+					let biasText = "0.0(완전 일치) 구간에 가장 많이 분포되어 있어 특정 방향으로의 편향(Bias) 없이 아주 안정적으로 예측하고 있습니다.";
+					if (maxIdx < 3) biasText = "음수 구간에 다소 쏠려 있어, 모델이 실제값보다 약간 더 높게(보수적으로) 전력량을 추정하는 경향이 관찰됩니다.";
+					else if (maxIdx > 3) biasText = "양수 구간에 다소 쏠려 있어, 모델이 실제값보다 부하량을 약간 낮게 예측하는 경향이 관찰됩니다.";
+
+					return `과거 구간의 오차(실제값 - 예측값) 히스토그램입니다. 현재 오차가 ${biasText}`;
+				};
+
+				const metrics = apiData
+					? [
+							{ title: "평균 절대 오차 (MAE)", value: `${apiData.metrics.mae} kW`, desc: "실측 부하와 예측치의 평균 편차", status: apiData.metrics.mae < 10 ? "우수" : "주의", badge: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: "check-circle" },
+							{ title: "평균 제곱근 오차 (RMSE)", value: `${apiData.metrics.rmse} kW`, desc: "피크 구간 큰 오차에 민감한 지표", status: "양호", badge: "bg-blue-50 text-blue-700 border-blue-100", icon: "activity" },
+							{ title: "백분율 오차 (MAPE)", value: `${apiData.metrics.mape}%`, desc: "전체 부하량 대비 오차 비율", status: apiData.metrics.mape < 5 ? "매우 우수" : "양호", badge: "bg-indigo-50 text-indigo-700 border-indigo-100", icon: "percent" },
+							{ title: "피크 시점 일치율", value: `${apiData.metrics.peak_match}%`, desc: "최대 전력 수요 발생 시점 적중률", status: "신뢰", badge: "bg-purple-50 text-purple-700 border-purple-100", icon: "target" },
+						]
+					: [];
 
 				return (
-					<div className="max-w-7xl mx-auto space-y-6">
-						{/* 상단 컨트롤 바 */}
-						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-							<div>
-								<h1 className="text-xl font-bold text-slate-900">시계열 부하 예측 모델링</h1>
-								<p className="text-xs sm:text-sm text-slate-500 mt-0.5">기상 시계열 패턴(계절성·추세) 기반 향후 냉난방 부하 예측 및 오차 검증</p>
+					<div className="min-h-screen flex flex-col">
+						{/* 💡 상단 GNB 컴포넌트 출력 */}
+						<GNB />
+
+						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+							{/* 타이틀 */}
+							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+								<h1 className="text-xl font-bold text-slate-900">시계열 부하 예측 백테스팅</h1>
+								<p className="text-xs sm:text-sm text-slate-500 mt-0.5">과거 데이터 패턴(계절성·추세)을 학습하여, 특정 과거 시점에서 미래를 예측해 보는 시뮬레이션을 수행합니다.</p>
 							</div>
 
-							<div className="flex flex-wrap items-center gap-3">
-								{/* 모델 선택 */}
-								<select value={modelType} onChange={(e) => setModelType(e.target.value)} className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2 font-medium focus:ring-2 focus:ring-brand-500 outline-none">
-									<option value="prophet">Prophet 시계열 모델 (권장)</option>
-									<option value="arima">SARIMA (계절형 자기회귀)</option>
-									<option value="ema">지수평활법 (Exponential Smoothing)</option>
-									<option value="moving_avg">이동평균 베이스라인 (7일)</option>
-								</select>
+							<div className="flex flex-col lg:flex-row gap-6 items-start">
+								{/* ─── 좌측 사이드바 (조건 설정 및 달력) ─── */}
+								<aside className="w-full lg:w-[320px] flex-shrink-0 flex flex-col gap-4 lg:sticky lg:top-24 z-20">
+									<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-5">
+										<div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+											<span className="w-5 h-5 rounded-md bg-slate-800 text-white flex items-center justify-center text-xs font-bold">
+												<Icon name="activity" className="w-3 h-3" />
+											</span>
+											<h2 className="font-bold text-slate-900">백테스팅 조건 설정</h2>
+										</div>
 
-								{/* 예측 구간 선택 */}
-								<div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
-									{["24h", "48h", "7d"].map((h) => (
-										<button key={h} onClick={() => setHorizon(h)} className={`px-3 py-1.5 rounded-lg transition ${horizon === h ? "bg-white text-brand-600 shadow-sm font-bold" : "hover:text-slate-900"}`}>
-											+{h.toUpperCase()} 예측
+										{/* 지역 선택 */}
+										<div>
+											<label className="block text-xs font-semibold text-slate-600 mb-1.5">테스트 지역</label>
+											<select value={station} onChange={(e) => setStation(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none">
+												{STATIONS.map((s) => (
+													<option key={s.id} value={s.id}>
+														{s.name} ({s.id})
+													</option>
+												))}
+											</select>
+										</div>
+
+										{/* 모델 및 구간 선택 */}
+										<div className="grid grid-cols-1 gap-4">
+											<div>
+												<label className="block text-xs font-semibold text-slate-600 mb-1.5">예측 모델 알고리즘</label>
+												<select value={modelType} onChange={(e) => setModelType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-brand-700 focus:ring-2 focus:ring-brand-500 outline-none">
+													<option value="prophet">Prophet 시계열 모델</option>
+													<option value="arima">SARIMA (계절형 자기회귀)</option>
+													<option value="ema">지수평활법 (EMA)</option>
+												</select>
+											</div>
+
+											<div>
+												<label className="block text-xs font-semibold text-slate-600 mb-1.5">미래 예측 구간 (Horizon)</label>
+												<div className="flex bg-slate-100 p-1 rounded-lg text-xs font-semibold text-slate-600">
+													{["24h", "48h", "7d"].map((h) => (
+														<button key={h} onClick={() => setHorizon(h)} className={`flex-1 py-1.5 rounded-md transition ${horizon === h ? "bg-white text-brand-600 shadow-sm font-bold border border-slate-200" : "hover:text-slate-900"}`}>
+															+{h.toUpperCase()}
+														</button>
+													))}
+												</div>
+											</div>
+										</div>
+
+										{/* 인터랙티브 달력 */}
+										<div className="pt-2 border-t border-slate-100">
+											<div className="flex justify-between items-center mb-4">
+												<label className="block text-xs font-semibold text-slate-600">학습 구간 설정</label>
+												<div className="flex items-center gap-2">
+													<button
+														onClick={() => {
+															if (calMonth === 1) {
+																setCalMonth(12);
+																setCalYear(calYear - 1);
+															} else setCalMonth(calMonth - 1);
+														}}
+														className="p-1 bg-slate-50 hover:bg-slate-100 rounded text-slate-600 font-bold transition"
+													>
+														&lt;
+													</button>
+													<span className="font-bold text-[13px] w-14 text-center text-slate-800">
+														{calYear}.{String(calMonth).padStart(2, "0")}
+													</span>
+													<button
+														onClick={() => {
+															if (calMonth === 12) {
+																setCalMonth(1);
+																setCalYear(calYear + 1);
+															} else setCalMonth(calMonth + 1);
+														}}
+														className="p-1 bg-slate-50 hover:bg-slate-100 rounded text-slate-600 font-bold transition"
+													>
+														&gt;
+													</button>
+												</div>
+											</div>
+
+											<div className="grid grid-cols-7 gap-1">
+												{["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+													<div key={d} className="text-center text-[11px] font-bold text-slate-400 py-1">
+														{d}
+													</div>
+												))}
+												{generateCalendar().map((dateStr, i) => {
+													if (!dateStr) return <div key={i} />;
+													const dNum = dateStr.split("-")[2].replace(/^0/, "");
+													const hasData = calData[dateStr] > 0;
+
+													const isStart = dateStr === startDate;
+													const isEnd = dateStr === endDate;
+													const inRange = dateStr >= startDate && dateStr <= endDate;
+
+													let bgClass = "bg-transparent";
+													let textClass = "text-slate-300 cursor-not-allowed";
+
+													if (hasData) {
+														bgClass = "bg-emerald-50/50 hover:bg-emerald-100 border border-emerald-100 cursor-pointer";
+														textClass = "text-emerald-700 font-bold";
+													}
+													if (hasData && inRange) {
+														bgClass = "bg-brand-50 border border-brand-200 cursor-pointer";
+														textClass = "text-brand-700 font-bold";
+													}
+													if (hasData && (isStart || isEnd)) {
+														bgClass = "bg-brand-500 border border-brand-600 shadow-sm cursor-pointer";
+														textClass = "text-white font-bold";
+													}
+
+													return (
+														<div key={dateStr} onClick={() => handleCalClick(dateStr)} className={`rounded text-center py-1.5 text-xs transition-all duration-150 ${bgClass} ${textClass}`}>
+															{dNum}
+														</div>
+													);
+												})}
+											</div>
+
+											{/* 선택된 기간 피드백 */}
+											<div className="mt-4 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200 flex flex-col gap-1 text-center">
+												<div className="flex flex-col gap-1.5">
+													<div className="flex justify-between items-center">
+														<span className="text-[11px] font-bold text-slate-500">과거 학습 시작일</span>
+														<span className="text-[12px] font-bold text-slate-700">{startDate}</span>
+													</div>
+													<div className="flex justify-between items-center">
+														<span className="text-[11px] font-bold text-rose-500">가상의 현재(종료일)</span>
+														<span className="text-[12px] font-bold text-rose-600">{endDate}</span>
+													</div>
+												</div>
+												{pickStep === 1 && <p className="text-[11px] text-rose-500 font-semibold mt-2 animate-pulse text-center">마지막 종료일을 클릭해주세요</p>}
+											</div>
+										</div>
+
+										<button type="button" onClick={fetchForecast} disabled={loading || pickStep === 1} className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-3 text-sm font-bold shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
+											{loading ? (
+												"모델 시뮬레이션 중..."
+											) : (
+												<>
+													<Icon name="search" />
+													모델 성능 평가 실행
+												</>
+											)}
 										</button>
-									))}
-								</div>
-							</div>
-						</div>
-
-						{/* ── 1. 예측 성능 지표 카드 4개 ── */}
-						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-							{METRICS.map((m, idx) => (
-								<div key={idx} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition">
-									<div className="flex items-center justify-between mb-2">
-										<span className="text-xs font-medium text-slate-500">{m.title}</span>
-										<span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${m.badgeColor}`}>{m.status}</span>
 									</div>
-									<div className="text-2xl font-bold text-slate-900">{m.value}</div>
-									<p className="mt-1.5 text-xs text-slate-400 leading-tight">{m.desc}</p>
-								</div>
-							))}
-						</div>
+								</aside>
 
-						{/* ── 2. 메인 시계열 예측 차트 (실측치 vs 예측치) ── */}
-						<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-							<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-								<div>
-									<div className="flex items-center gap-2">
-										<span className="text-xs font-bold px-2 py-0.5 rounded bg-brand-100 text-brand-700">시계열 추정</span>
-										<h3 className="font-bold text-slate-900 text-base">향후 24시간 냉·난방 부하 예측 곡선</h3>
-									</div>
-									<p className="text-xs text-slate-400 mt-0.5">실측 과거 데이터와 기상 예보 기반 95% 신뢰구간 부하 예측</p>
-								</div>
-								<div className="flex items-center gap-2 text-xs">
-									<span className="inline-flex items-center gap-1 text-slate-600">
-										<span className="w-2.5 h-2.5 bg-slate-800 rounded-full inline-block"></span> 실측치
-									</span>
-									<span className="inline-flex items-center gap-1 text-brand-600 font-semibold">
-										<span className="w-2.5 h-2.5 bg-brand-600 rounded-full inline-block"></span> 예측치
-									</span>
-								</div>
-							</div>
-							<div className="h-72 w-full">
-								<canvas ref={forecastChartRef}></canvas>
-							</div>
-						</div>
+								{/* ─── 우측 메인 (차트 & 결과) ─── */}
+								<main className="flex-1 w-full min-w-0 space-y-6">
+									{error && <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm font-bold">{error}</div>}
 
-						{/* ── 3. 하단 서브 차트: 시계열 분해 & 잔차 분포 ── */}
-						<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-							{/* 시계열 분해 차트 (추세/계절성) */}
-							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-								<div className="flex justify-between items-start mb-3">
-									<div>
-										<h3 className="font-bold text-slate-900 text-base">시계열 분해 성분 (Decomposition)</h3>
-										<p className="text-xs text-slate-400 mt-0.5">기저 상승 추세(Trend)와 24시간 주기 일변화(Daily Seasonal)</p>
-									</div>
-								</div>
-								<div className="h-60 w-full">
-									<canvas ref={decompChartRef}></canvas>
-								</div>
-								<div className="mt-3 p-3 bg-slate-50 rounded-xl text-xs text-slate-600">
-									💡 <b>해석:</b> 주간 기온 상승으로 기저 추세가 완만히 우상향(+0.4kW/일)하며, 14~15시에 계절성 피크(+4.2kW)가 중첩됩니다.
-								</div>
-							</div>
+									{/* 빈 화면 (Empty State) */}
+									{!apiData && !loading && !error && (
+										<div className="bg-white rounded-2xl shadow-sm border border-dashed border-slate-300 p-8 sm:p-16 text-center relative overflow-hidden h-[500px] flex items-center justify-center animate-fade-in">
+											<div className="absolute inset-0 bg-[linear-gradient(to_right,#f8fafc_1px,transparent_1px),linear-gradient(to_bottom,#f8fafc_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+											<div className="relative z-10 flex flex-col items-center">
+												<div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mb-4">
+													<Icon name="activity" className="text-brand-500 w-8 h-8" />
+												</div>
+												<h3 className="text-lg font-bold text-slate-700 mb-2">시뮬레이션을 시작해 주세요</h3>
+												<p className="text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
+													좌측 달력에서 <b>초록색(데이터 있음) 날짜</b>를 클릭하여
+													<br />
+													학습 구간을 설정한 뒤 실행 버튼을 눌러주세요.
+												</p>
+											</div>
+										</div>
+									)}
 
-							{/* 잔차 정규성 분포 차트 */}
-							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-								<div className="flex justify-between items-start mb-3">
-									<div>
-										<h3 className="font-bold text-slate-900 text-base">예측 잔차 오차 분포 (Residuals)</h3>
-										<p className="text-xs text-slate-400 mt-0.5">오차의 정규분포(Zero-Mean) 충족 여부 진단</p>
-									</div>
-								</div>
-								<div className="h-60 w-full">
-									<canvas ref={residualChartRef}></canvas>
-								</div>
-								<div className="mt-3 p-3 bg-slate-50 rounded-xl text-xs text-slate-600">
-									💡 <b>진단:</b> 오차가 0kW를 중심으로 대칭 종형 곡선을 형성하여 특정 방향으로의 편향(Bias) 없이 잘 학습되었습니다.
-								</div>
-							</div>
-						</div>
+									{apiData && !error && (
+										<div className="space-y-6 animate-fade-in">
+											{/* 아코디언 그룹 */}
+											<div className="flex flex-col gap-3">
+												{/* 1. 예측 모델 알고리즘 가이드 */}
+												<div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200 transition-all">
+													<button onClick={() => setIsModelGuideOpen(!isModelGuideOpen)} className="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-slate-50 transition-colors">
+														<span className="font-bold text-sm text-slate-800 flex items-center gap-2">
+															<Icon name="layers" className="text-brand-500 w-5 h-5" />
+															선택한 예측 모델의 알고리즘 원리 알아보기
+														</span>
+														<Icon name={isModelGuideOpen ? "chevron-up" : "chevron-down"} className="text-slate-400 w-5 h-5" />
+													</button>
+													{isModelGuideOpen && (
+														<div className="px-4 sm:px-5 pb-5 pt-2 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-5 bg-white animate-fade-in text-[13px] text-slate-600">
+															<div>
+																<h3 className="font-bold text-brand-600 mb-1">Prophet 시계열 모델</h3>
+																<p>
+																	Meta(구 Facebook)에서 개발한 강력한 예측 알고리즘으로, 일/주/연간 등 복합적인 <b>계절성(Seasonality)</b>과 공휴일 효과를 유연하게 반영합니다. 전력 부하 데이터 예측에 가장 범용적으로 권장됩니다.
+																</p>
+															</div>
+															<div>
+																<h3 className="font-bold text-brand-600 mb-1">SARIMA (계절형 자기회귀)</h3>
+																<p>
+																	전통적인 통계 기반의 ARIMA 모델에 계절성 파라미터를 추가한 모델입니다. 과거의 오차와 추세를 <b>수학적으로 엄밀하게 반영</b>하지만, 갑작스러운 패턴 변화에는 대응이 다소 늦을 수 있습니다.
+																</p>
+															</div>
+															<div>
+																<h3 className="font-bold text-brand-600 mb-1">지수평활법 (EMA)</h3>
+																<p>
+																	과거 데이터 중 <b>가장 최근의 관측치일수록 더 높은 가중치를 부여</b>하여 미래를 예측하는 기법입니다. 전일 발생한 급격한 날씨 변화 등 단기 트렌드 변동을 즉각적으로 추종하는 데 유리합니다.
+																</p>
+															</div>
+														</div>
+													)}
+												</div>
 
-						{/* ── 4. 예측 기반 피크 부하 사전 제어 권고 ── */}
-						<div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-							<div className="space-y-1">
-								<div className="flex items-center gap-2">
-									<span className="w-2 h-2 rounded-full bg-amber-500"></span>
-									<h4 className="font-bold text-slate-900 text-sm">내일 14:00 ~ 16:00 피크 부하(8.6kW) 도달 경보</h4>
-								</div>
-								<p className="text-xs text-slate-500 leading-relaxed max-w-2xl">예측 모델에 따르면 내일 낮 최고기온(33.1℃) 상승으로 최대 부하가 기준 용량의 85%를 상회할 것으로 예상됩니다. 오전 10:00~11:30 사전 냉각을 통해 전력 피크를 18% 분산시키는 것을 제안합니다.</p>
+												{/* 2. 평가지표 가이드 */}
+												<div className="bg-slate-800 text-white rounded-2xl shadow-sm overflow-hidden border border-slate-700 transition-all">
+													<button onClick={() => setIsGuideOpen(!isGuideOpen)} className="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-slate-700 transition-colors">
+														<span className="font-bold text-sm text-slate-200 flex items-center gap-2">
+															<Icon name="bulb" className="text-amber-400 w-5 h-5" />
+															모델 성능 평가 지표 (RMSE, MAE, MAPE) 해석 방법
+														</span>
+														<Icon name={isGuideOpen ? "chevron-up" : "chevron-down"} className="text-slate-400 w-5 h-5" />
+													</button>
+													{isGuideOpen && (
+														<div className="px-4 sm:px-5 pb-5 pt-2 border-t border-slate-700 grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-800 animate-fade-in text-[13px] text-slate-300">
+															<div>
+																<h3 className="font-bold text-rose-300 mb-1">RMSE (평균 제곱근 오차)</h3>
+																<p>
+																	오차의 제곱에 평균을 낸 뒤 루트를 씌운 값입니다. 예측이 실제값을 <b>크게(크리티컬하게) 빗나갈 때 패널티를 강하게 주어</b>, 대형 오차 발생 여부를 파악하는 데 적합합니다.
+																</p>
+															</div>
+															<div>
+																<h3 className="font-bold text-brand-300 mb-1">MAE (평균 절대 오차)</h3>
+																<p>
+																	실제값과 예측값 차이의 절대값을 단순 평균낸 수치입니다. 이상치에 영향을 덜 받으며, 비전문가가 보더라도 <b>"평균적으로 모델이 몇 kW 빗나가는가"</b>를 가장 직관적으로 보여줍니다.
+																</p>
+															</div>
+															<div>
+																<h3 className="font-bold text-amber-300 mb-1">MAPE (백분율 오차)</h3>
+																<p>
+																	오차를 <b>실제값 대비 퍼센트(%) 비율</b>로 나타낸 지표입니다. 부하량의 절대적인 규모(Scale)가 달라도 모델의 정확도를 퍼센트로 쉽게 비교할 수 있어 범용적으로 널리 쓰입니다.
+																</p>
+															</div>
+														</div>
+													)}
+												</div>
+											</div>
+
+											{/* 지표 카드 4개 */}
+											<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+												{metrics.map((m, idx) => (
+													<div key={idx} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition">
+														<div className="flex items-center justify-between mb-2">
+															<span className="text-xs font-medium text-slate-500 flex items-center gap-1">
+																<Icon name={m.icon} className="w-3.5 h-3.5" /> {m.title}
+															</span>
+															<span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${m.badge}`}>{m.status}</span>
+														</div>
+														<div className="text-2xl font-bold text-slate-900">{m.value}</div>
+														<p className="mt-1.5 text-xs text-slate-400 leading-tight">{m.desc}</p>
+													</div>
+												))}
+											</div>
+
+											{/* 메인 시계열 차트 */}
+											<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative">
+												{loading && <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center font-bold text-brand-600">데이터를 분석 중입니다...</div>}
+
+												<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+													<div>
+														<div className="flex items-center gap-2">
+															<span className="text-xs font-bold px-2 py-0.5 rounded bg-brand-100 text-brand-700">시계열 추정</span>
+															<h3 className="font-bold text-slate-900 text-base">향후 {horizon.toUpperCase()} 냉·난방 부하 예측 곡선</h3>
+														</div>
+														<p className="text-xs text-slate-400 mt-0.5">과거 데이터를 학습하여 생성된 미래 예측치 및 95% 신뢰구간(CI) 밴드</p>
+													</div>
+												</div>
+												<div className="h-[350px] w-full">
+													<canvas ref={forecastChartRef}></canvas>
+												</div>
+
+												{/* 동적 메인 차트 해석 박스 */}
+												<div className="mt-4 p-4 bg-brand-50/50 border border-brand-100 rounded-xl text-[13px] text-slate-700 flex gap-2.5 items-start">
+													<Icon name="bulb" className="w-5 h-5 text-brand-500 flex-shrink-0 mt-0.5" />
+													<p>
+														<b>실데이터 기반 분석:</b> {getMainInsight()}
+													</p>
+												</div>
+											</div>
+
+											{/* 하단 서브 차트 2개 */}
+											<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+												<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+													<div className="flex justify-between items-start mb-3">
+														<div>
+															<h3 className="font-bold text-slate-900 text-base">시계열 분해 성분 (Decomposition)</h3>
+															<p className="text-xs text-slate-400 mt-0.5">기저 상승 추세(Trend)와 24시간 주기 일변화(Daily Seasonal)</p>
+														</div>
+													</div>
+													<div className="h-60 w-full mb-4">
+														<canvas ref={decompChartRef}></canvas>
+													</div>
+
+													{/* 동적 시계열 분해 차트 해석 박스 */}
+													<div className="mt-auto p-4 bg-slate-50 border border-slate-200 rounded-xl text-[13px] text-slate-700 flex gap-2.5 items-start">
+														<Icon name="bulb" className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+														<p>
+															<b>실데이터 기반 분석:</b> {getDecompInsight()}
+														</p>
+													</div>
+												</div>
+
+												<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+													<div className="flex justify-between items-start mb-3">
+														<div>
+															<h3 className="font-bold text-slate-900 text-base">예측 잔차 오차 분포 (Residuals)</h3>
+															<p className="text-xs text-slate-400 mt-0.5">오차의 정규분포(Zero-Mean) 충족 여부 진단</p>
+														</div>
+													</div>
+													<div className="h-60 w-full mb-4">
+														<canvas ref={residualChartRef}></canvas>
+													</div>
+
+													{/* 동적 잔차 차트 해석 박스 */}
+													<div className="mt-auto p-4 bg-slate-50 border border-slate-200 rounded-xl text-[13px] text-slate-700 flex gap-2.5 items-start">
+														<Icon name="bulb" className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+														<p>
+															<b>실데이터 기반 분석:</b> {getResidualInsight()}
+														</p>
+													</div>
+												</div>
+											</div>
+
+											{/* 피크 부하 경보 배너 (동적) */}
+											<div className="bg-white rounded-2xl p-6 border-l-4 border-l-rose-500 border-y border-r border-slate-200 shadow-sm flex items-start gap-4">
+												<Icon name="alert-triangle" className="w-6 h-6 text-rose-500 flex-shrink-0 mt-0.5" />
+												<div className="space-y-1 w-full">
+													<h4 className="font-bold text-slate-900 text-base">
+														피크 부하 도달 예상 경보: {apiData.peak_alert.time} ({apiData.peak_alert.val}kW)
+													</h4>
+													<p className="text-[13px] text-slate-500 leading-relaxed">시뮬레이션 결과, 해당 시점에 냉난방기 등 설비 사용이 집중되어 일시적인 최대 전력 부하에 도달할 것으로 보입니다. 해당 시간대 전후로 불필요한 전력 소모를 줄이거나, 1~2시간 전 사전 냉각/난방 가동을 통해 전력 피크를 분산시키는 대비가 필요합니다.</p>
+												</div>
+											</div>
+										</div>
+									)}
+								</main>
 							</div>
-							<button className="whitespace-nowrap bg-brand-50 hover:bg-brand-100 text-brand-700 px-4 py-2 rounded-xl text-xs font-bold transition">부하 분산 시뮬레이션</button>
 						</div>
 					</div>
 				);

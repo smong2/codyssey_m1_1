@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from src.lib.db import init_db
-from src.api import collect, view, eda, predict, report, dashboard
+from src.api import collect, view, eda, forecast, report, dashboard
 
 app = FastAPI(title="WeatherLoad API")
 
@@ -14,7 +14,7 @@ app.include_router(dashboard.router, prefix="/api/weather", tags=["Dashboard"])
 app.include_router(collect.router, prefix="/api/weather", tags=["Collect"])
 app.include_router(view.router, prefix="/api/weather", tags=["View"])
 app.include_router(eda.router, prefix="/api/weather", tags=["EDA"])
-app.include_router(predict.router, prefix="/api/weather", tags=["Predict"])
+app.include_router(forecast.router, prefix="/api/weather", tags=["forecast"])
 app.include_router(report.router, prefix="/api/weather", tags=["Report"])
 
 # 프론트엔드 HTML 서빙
@@ -26,9 +26,9 @@ async def read_data():
 async def read_eda():
     return FileResponse("src/eda.html")
 
-@app.get("/predict.html")
-async def read_predict():
-    return FileResponse("src/predict.html")
+@app.get("/forecast.html")
+async def read_forecast():
+    return FileResponse("src/forecast.html")
 
 @app.get("/report.html")
 async def read_report():

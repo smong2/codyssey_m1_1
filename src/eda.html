@@ -37,12 +37,18 @@
 		<script>
 			tailwind.config = { theme: { extend: { colors: { brand: { 50: "#eff6ff", 100: "#dbeafe", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" } } } } };
 		</script>
+
+		<!-- 💡 공통 GNB 스크립트 로드 -->
+		<script type="text/babel" src="/gnb.js"></script>
 	</head>
-	<body class="bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8 notranslate" translate="no">
+
+	<!-- 💡 GNB가 꽉 차도록 body 여백(p-4 등) 제거 -->
+	<body class="bg-slate-50 text-slate-800 notranslate" translate="no">
 		<div id="root"></div>
 
 		<script type="text/babel">
 			const { useState, useEffect, useRef } = React;
+			const { GNB } = window; // 💡 GNB 컴포넌트 연결
 
 			const STATIONS = [
 				{ id: "108", name: "서울" },
@@ -253,247 +259,252 @@
 				const totalHDD = data.daily.length > 0 ? data.daily.reduce((acc, cur) => acc + cur.sum_hdd, 0).toFixed(1) : 0;
 
 				return (
-					<div className="max-w-[1400px] mx-auto space-y-6 pb-12">
-						{/* Header */}
-						<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-							<div>
-								<h1 className="text-xl font-bold text-slate-900">탐색적 데이터 분석 (EDA) 대시보드</h1>
-								<p className="text-xs sm:text-sm text-slate-500 mt-1">기상 변수와 에너지 부하량 간의 상관관계를 시각화하고 특징을 도출합니다.</p>
-							</div>
-						</div>
+					<div className="min-h-screen flex flex-col">
+						{/* 💡 상단 GNB 컴포넌트 출력 */}
+						<GNB />
 
-						<div className="flex flex-col lg:flex-row gap-6 items-start">
-							{/* ─── 좌측 사이드바 (조건 설정 및 달력) ─── */}
-							<aside className="w-full lg:w-[340px] flex-shrink-0 flex flex-col gap-4 lg:sticky lg:top-6 z-20">
-								<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-5">
-									<div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-										<span className="w-5 h-5 rounded-md bg-slate-800 text-white flex items-center justify-center text-xs font-bold">1</span>
-										<h2 className="font-bold text-slate-900">분석 조건 설정</h2>
-									</div>
-
-									{/* 지역 선택 */}
-									<div>
-										<label className="block text-xs font-semibold text-slate-600 mb-1.5">분석 대상 지역</label>
-										<select value={station} onChange={(e) => setStation(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none">
-											{STATIONS.map((s) => (
-												<option key={s.id} value={s.id}>
-													{s.name} ({s.id})
-												</option>
-											))}
-										</select>
-									</div>
-
-									{/* 인터랙티브 달력 */}
-									<div className="pt-2">
-										<div className="flex justify-between items-center mb-4">
-											<label className="block text-xs font-semibold text-slate-600">조회 기간 선택</label>
-											<div className="flex items-center gap-2">
-												<button
-													onClick={() => {
-														if (calMonth === 1) {
-															setCalMonth(12);
-															setCalYear(calYear - 1);
-														} else setCalMonth(calMonth - 1);
-													}}
-													className="p-1 bg-slate-50 hover:bg-slate-100 rounded text-slate-600 font-bold transition"
-												>
-													&lt;
-												</button>
-												<span className="font-bold text-[13px] w-14 text-center text-slate-800">
-													{calYear}.{String(calMonth).padStart(2, "0")}
-												</span>
-												<button
-													onClick={() => {
-														if (calMonth === 12) {
-															setCalMonth(1);
-															setCalYear(calYear + 1);
-														} else setCalMonth(calMonth + 1);
-													}}
-													className="p-1 bg-slate-50 hover:bg-slate-100 rounded text-slate-600 font-bold transition"
-												>
-													&gt;
-												</button>
-											</div>
-										</div>
-
-										<div className="grid grid-cols-7 gap-1">
-											{["일", "월", "화", "수", "목", "금", "토"].map((d) => (
-												<div key={d} className="text-center text-[11px] font-bold text-slate-400 py-1">
-													{d}
-												</div>
-											))}
-											{generateCalendar().map((dateStr, i) => {
-												if (!dateStr) return <div key={i} />;
-												const dNum = dateStr.split("-")[2].replace(/^0/, "");
-												const hasData = calData[dateStr] > 0;
-
-												const isStart = dateStr === startDate;
-												const isEnd = dateStr === endDate;
-												const inRange = dateStr >= startDate && dateStr <= endDate;
-
-												let bgClass = "bg-transparent";
-												let textClass = "text-slate-300 cursor-not-allowed";
-
-												if (hasData) {
-													bgClass = "bg-emerald-50/50 hover:bg-emerald-100 border border-emerald-100 cursor-pointer";
-													textClass = "text-emerald-700 font-bold";
-												}
-												if (hasData && inRange) {
-													bgClass = "bg-brand-50 border border-brand-200 cursor-pointer";
-													textClass = "text-brand-700 font-bold";
-												}
-												if (hasData && (isStart || isEnd)) {
-													bgClass = "bg-brand-500 border border-brand-600 shadow-sm cursor-pointer";
-													textClass = "text-white font-bold";
-												}
-
-												return (
-													<div key={dateStr} onClick={() => handleCalClick(dateStr)} className={`rounded text-center py-1.5 text-xs transition-all duration-150 ${bgClass} ${textClass}`}>
-														{dNum}
-													</div>
-												);
-											})}
-										</div>
-
-										{/* 선택된 기간 한줄 요약 피드백 */}
-										<div className="mt-4 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200 flex flex-col gap-1 text-center">
-											<div className="flex items-center justify-between">
-												<span className="text-[11px] font-bold text-slate-500">선택 기간</span>
-												<div className="flex items-center gap-1.5">
-													<span className="text-[13px] font-bold text-brand-700">{startDate}</span>
-													<span className="text-[11px] text-slate-400">~</span>
-													<span className="text-[13px] font-bold text-brand-700">{endDate}</span>
-												</div>
-											</div>
-											{pickStep === 1 && <p className="text-[11px] text-rose-500 font-semibold mt-1 animate-pulse text-right">마지막 종료일을 클릭해주세요</p>}
-										</div>
-									</div>
-
-									<button type="button" onClick={fetchEdaData} disabled={loading || pickStep === 1} className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-3 text-sm font-bold shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
-										{loading ? (
-											"데이터 분석 중..."
-										) : (
-											<>
-												<Icon name="search" />
-												데이터 시각화 실행
-											</>
-										)}
-									</button>
+						<div className="flex-1 max-w-[1400px] w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-12">
+							{/* Header */}
+							<div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+								<div>
+									<h1 className="text-xl font-bold text-slate-900">탐색적 데이터 분석 (EDA) 대시보드</h1>
+									<p className="text-xs sm:text-sm text-slate-500 mt-1">기상 변수와 에너지 부하량 간의 상관관계를 시각화하고 특징을 도출합니다.</p>
 								</div>
-							</aside>
+							</div>
 
-							{/* ─── 우측 메인 (차트 & 결과) ─── */}
-							<main className="flex-1 w-full min-w-0 space-y-6">
-								{error && <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm font-bold">{error}</div>}
-
-								{/* 빈 화면 (Empty State) */}
-								{!loaded && !loading && !error && (
-									<div className="bg-white rounded-2xl shadow-sm border border-dashed border-slate-300 p-8 sm:p-16 text-center relative overflow-hidden h-[500px] flex items-center justify-center animate-fade-in">
-										<div className="absolute inset-0 bg-[linear-gradient(to_right,#f8fafc_1px,transparent_1px),linear-gradient(to_bottom,#f8fafc_1px,transparent_1px)] bg-[size:40px_40px]"></div>
-										<div className="relative z-10 flex flex-col items-center">
-											<div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mb-4">
-												<Icon name="calendar" className="text-brand-500 w-8 h-8" />
-											</div>
-											<h3 className="text-lg font-bold text-slate-700 mb-2">분석할 기간을 선택해주세요</h3>
-											<p className="text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
-												좌측 달력에서 데이터가 <b>수집된 날짜(초록색)</b>를 클릭하여
-												<br />
-												시작일과 종료일을 지정한 뒤 시각화 버튼을 눌러주세요.
-											</p>
+							<div className="flex flex-col lg:flex-row gap-6 items-start">
+								{/* ─── 좌측 사이드바 (조건 설정 및 달력) ─── */}
+								<aside className="w-full lg:w-[340px] flex-shrink-0 flex flex-col gap-4 lg:sticky lg:top-24 z-20">
+									<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-5">
+										<div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+											<span className="w-5 h-5 rounded-md bg-slate-800 text-white flex items-center justify-center text-xs font-bold">1</span>
+											<h2 className="font-bold text-slate-900">분석 조건 설정</h2>
 										</div>
-									</div>
-								)}
 
-								{/* 대시보드 렌더링 영역 */}
-								{loaded && !loading && !error && (
-									<div className="space-y-6 animate-fade-in">
-										{/* 설명 가이드 배너 (접기/펴기 적용) */}
-										<div className="bg-slate-800 text-white rounded-2xl shadow-sm overflow-hidden border border-slate-700 transition-all">
-											{/* 토글 버튼 (항상 노출) */}
-											<button onClick={() => setIsGuideOpen(!isGuideOpen)} className="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-slate-700 transition-colors">
-												<span className="font-bold text-sm text-slate-200 flex items-center gap-2">
-													<Icon name="bulb" className="text-amber-400 w-5 h-5" />
-													분석 지표 (추정 부하, CDD/HDD) 용어 설명 보기
-												</span>
-												<Icon name={isGuideOpen ? "chevron-up" : "chevron-down"} className="text-slate-400 w-5 h-5" />
-											</button>
+										{/* 지역 선택 */}
+										<div>
+											<label className="block text-xs font-semibold text-slate-600 mb-1.5">분석 대상 지역</label>
+											<select value={station} onChange={(e) => setStation(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none">
+												{STATIONS.map((s) => (
+													<option key={s.id} value={s.id}>
+														{s.name} ({s.id})
+													</option>
+												))}
+											</select>
+										</div>
 
-											{/* 펼쳐질 때 보이는 내용 */}
-											{isGuideOpen && (
-												<div className="px-4 sm:px-5 pb-5 pt-2 border-t border-slate-700 flex flex-col xl:flex-row gap-5 animate-fade-in bg-slate-800">
-													<div className="flex-1 space-y-2">
-														<h3 className="font-bold text-brand-300">추정 부하 (kW)란?</h3>
-														<p className="text-[13px] text-slate-300 leading-relaxed">
-															실제 도시 전체 전력량이 아닌, 기상 조건 변화가 에너지 수요에 미치는 영향을 순수하게 분석하기 위해 시뮬레이션한 <b>'단위 표준 건물'의 전력 부하량</b>입니다. 기온에 따른 에너지 민감도를 평가하는 종속 변수로 활용됩니다.
-														</p>
+										{/* 인터랙티브 달력 */}
+										<div className="pt-2">
+											<div className="flex justify-between items-center mb-4">
+												<label className="block text-xs font-semibold text-slate-600">조회 기간 선택</label>
+												<div className="flex items-center gap-2">
+													<button
+														onClick={() => {
+															if (calMonth === 1) {
+																setCalMonth(12);
+																setCalYear(calYear - 1);
+															} else setCalMonth(calMonth - 1);
+														}}
+														className="p-1 bg-slate-50 hover:bg-slate-100 rounded text-slate-600 font-bold transition"
+													>
+														&lt;
+													</button>
+													<span className="font-bold text-[13px] w-14 text-center text-slate-800">
+														{calYear}.{String(calMonth).padStart(2, "0")}
+													</span>
+													<button
+														onClick={() => {
+															if (calMonth === 12) {
+																setCalMonth(1);
+																setCalYear(calYear + 1);
+															} else setCalMonth(calMonth + 1);
+														}}
+														className="p-1 bg-slate-50 hover:bg-slate-100 rounded text-slate-600 font-bold transition"
+													>
+														&gt;
+													</button>
+												</div>
+											</div>
+
+											<div className="grid grid-cols-7 gap-1">
+												{["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+													<div key={d} className="text-center text-[11px] font-bold text-slate-400 py-1">
+														{d}
 													</div>
-													<div className="w-px bg-slate-600 hidden xl:block"></div>
-													<div className="flex-1 space-y-2">
-														<h3 className="font-bold text-amber-300">냉/난방도일(CDD/HDD) 수치의 의미</h3>
-														<p className="text-[13px] text-slate-300 leading-relaxed">
-															냉방도일(CDD)은 기준 온도(24℃)를 초과한 온도의 합산을 뜻합니다. 예를 들어 <b>CDD 누적값이 4.5</b>라면, 그날 하루의 체감 평균기온이 <b>28.5℃ (24+4.5)</b>로 유지되었음을 의미하며 이 수치가 클수록 에너지가 급증합니다.
-														</p>
+												))}
+												{generateCalendar().map((dateStr, i) => {
+													if (!dateStr) return <div key={i} />;
+													const dNum = dateStr.split("-")[2].replace(/^0/, "");
+													const hasData = calData[dateStr] > 0;
+
+													const isStart = dateStr === startDate;
+													const isEnd = dateStr === endDate;
+													const inRange = dateStr >= startDate && dateStr <= endDate;
+
+													let bgClass = "bg-transparent";
+													let textClass = "text-slate-300 cursor-not-allowed";
+
+													if (hasData) {
+														bgClass = "bg-emerald-50/50 hover:bg-emerald-100 border border-emerald-100 cursor-pointer";
+														textClass = "text-emerald-700 font-bold";
+													}
+													if (hasData && inRange) {
+														bgClass = "bg-brand-50 border border-brand-200 cursor-pointer";
+														textClass = "text-brand-700 font-bold";
+													}
+													if (hasData && (isStart || isEnd)) {
+														bgClass = "bg-brand-500 border border-brand-600 shadow-sm cursor-pointer";
+														textClass = "text-white font-bold";
+													}
+
+													return (
+														<div key={dateStr} onClick={() => handleCalClick(dateStr)} className={`rounded text-center py-1.5 text-xs transition-all duration-150 ${bgClass} ${textClass}`}>
+															{dNum}
+														</div>
+													);
+												})}
+											</div>
+
+											{/* 선택된 기간 한줄 요약 피드백 */}
+											<div className="mt-4 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200 flex flex-col gap-1 text-center">
+												<div className="flex items-center justify-between">
+													<span className="text-[11px] font-bold text-slate-500">선택 기간</span>
+													<div className="flex items-center gap-1.5">
+														<span className="text-[13px] font-bold text-brand-700">{startDate}</span>
+														<span className="text-[11px] text-slate-400">~</span>
+														<span className="text-[13px] font-bold text-brand-700">{endDate}</span>
 													</div>
 												</div>
+												{pickStep === 1 && <p className="text-[11px] text-rose-500 font-semibold mt-1 animate-pulse text-right">마지막 종료일을 클릭해주세요</p>}
+											</div>
+										</div>
+
+										<button type="button" onClick={fetchEdaData} disabled={loading || pickStep === 1} className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-3 text-sm font-bold shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2 mt-2">
+											{loading ? (
+												"데이터 분석 중..."
+											) : (
+												<>
+													<Icon name="search" />
+													데이터 시각화 실행
+												</>
 											)}
-										</div>
-
-										{/* Summary KPIs */}
-										<section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-											<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-rose-500">
-												<span className="text-xs font-medium text-slate-500">기간 평균 기온</span>
-												<p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
-													{avgTemp} <span className="text-sm font-normal text-slate-400">℃</span>
-												</p>
-											</div>
-											<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-brand-500">
-												<span className="text-xs font-medium text-slate-500">누적 냉방도일(CDD)</span>
-												<p className="text-xl sm:text-2xl font-bold text-brand-600 mt-1">{totalCDD}</p>
-											</div>
-											<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-orange-500">
-												<span className="text-xs font-medium text-slate-500">누적 난방도일(HDD)</span>
-												<p className="text-xl sm:text-2xl font-bold text-orange-600 mt-1">{totalHDD}</p>
-											</div>
-											<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-slate-800">
-												<span className="text-xs font-medium text-slate-500">최대 부하</span>
-												<p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
-													{maxLoad} <span className="text-sm font-normal text-slate-400">kW</span>
-												</p>
-											</div>
-										</section>
-
-										{/* 차트 1: 추세선 */}
-										<div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm w-full">
-											<h3 className="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
-												<Icon name="bar-chart" /> 시계열 기온-전력 부하 동기화 패턴
-											</h3>
-											<p className="text-[11px] sm:text-xs text-slate-500 mb-4">시간 흐름에 따른 기온 상승이 전력 부하 곡선을 얼마나 유사하게 끌어올리는지 패턴을 입증합니다.</p>
-											<div className="relative h-64 sm:h-80 w-full min-w-0">
-												<canvas id="chartTrend"></canvas>
-											</div>
-										</div>
-
-										{/* 차트 2,3: 산점도 & 바차트 */}
-										<div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full">
-											<div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm w-full min-w-0">
-												<h3 className="text-sm font-bold text-slate-900 mb-1">기온 vs 전력 부하 (Scatter)</h3>
-												<p className="text-[11px] sm:text-xs text-slate-500 mb-4">임계점을 넘을 때 부하가 상승하는 비선형(U/V형) 관계를 도출합니다.</p>
-												<div className="relative h-64 sm:h-72 w-full">
-													<canvas id="chartScatter"></canvas>
-												</div>
-											</div>
-
-											<div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm w-full min-w-0">
-												<h3 className="text-sm font-bold text-slate-900 mb-1">일별 냉/난방 에너지 소비 지수</h3>
-												<p className="text-[11px] sm:text-xs text-slate-500 mb-4">기준 온도를 초과한 누적값(CDD/HDD)을 통해 실제 에너지 소요량을 비교합니다.</p>
-												<div className="relative h-64 sm:h-72 w-full">
-													<canvas id="chartBar"></canvas>
-												</div>
-											</div>
-										</div>
+										</button>
 									</div>
-								)}
-							</main>
+								</aside>
+
+								{/* ─── 우측 메인 (차트 & 결과) ─── */}
+								<main className="flex-1 w-full min-w-0 space-y-6">
+									{error && <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm font-bold">{error}</div>}
+
+									{/* 빈 화면 (Empty State) */}
+									{!loaded && !loading && !error && (
+										<div className="bg-white rounded-2xl shadow-sm border border-dashed border-slate-300 p-8 sm:p-16 text-center relative overflow-hidden h-[500px] flex items-center justify-center animate-fade-in">
+											<div className="absolute inset-0 bg-[linear-gradient(to_right,#f8fafc_1px,transparent_1px),linear-gradient(to_bottom,#f8fafc_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+											<div className="relative z-10 flex flex-col items-center">
+												<div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mb-4">
+													<Icon name="calendar" className="text-brand-500 w-8 h-8" />
+												</div>
+												<h3 className="text-lg font-bold text-slate-700 mb-2">분석할 기간을 선택해주세요</h3>
+												<p className="text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
+													좌측 달력에서 데이터가 <b>수집된 날짜(초록색)</b>를 클릭하여
+													<br />
+													시작일과 종료일을 지정한 뒤 시각화 버튼을 눌러주세요.
+												</p>
+											</div>
+										</div>
+									)}
+
+									{/* 대시보드 렌더링 영역 */}
+									{loaded && !loading && !error && (
+										<div className="space-y-6 animate-fade-in">
+											{/* 설명 가이드 배너 (접기/펴기 적용) */}
+											<div className="bg-slate-800 text-white rounded-2xl shadow-sm overflow-hidden border border-slate-700 transition-all">
+												{/* 토글 버튼 (항상 노출) */}
+												<button onClick={() => setIsGuideOpen(!isGuideOpen)} className="w-full flex items-center justify-between p-4 sm:px-5 hover:bg-slate-700 transition-colors">
+													<span className="font-bold text-sm text-slate-200 flex items-center gap-2">
+														<Icon name="bulb" className="text-amber-400 w-5 h-5" />
+														분석 지표 (추정 부하, CDD/HDD) 용어 설명 보기
+													</span>
+													<Icon name={isGuideOpen ? "chevron-up" : "chevron-down"} className="text-slate-400 w-5 h-5" />
+												</button>
+
+												{/* 펼쳐질 때 보이는 내용 */}
+												{isGuideOpen && (
+													<div className="px-4 sm:px-5 pb-5 pt-2 border-t border-slate-700 flex flex-col xl:flex-row gap-5 animate-fade-in bg-slate-800">
+														<div className="flex-1 space-y-2">
+															<h3 className="font-bold text-brand-300">추정 부하 (kW)란?</h3>
+															<p className="text-[13px] text-slate-300 leading-relaxed">
+																실제 도시 전체 전력량이 아닌, 기상 조건 변화가 에너지 수요에 미치는 영향을 순수하게 분석하기 위해 시뮬레이션한 <b>'단위 표준 건물'의 전력 부하량</b>입니다. 기온에 따른 에너지 민감도를 평가하는 종속 변수로 활용됩니다.
+															</p>
+														</div>
+														<div className="w-px bg-slate-600 hidden xl:block"></div>
+														<div className="flex-1 space-y-2">
+															<h3 className="font-bold text-amber-300">냉/난방도일(CDD/HDD) 수치의 의미</h3>
+															<p className="text-[13px] text-slate-300 leading-relaxed">
+																냉방도일(CDD)은 기준 온도(24℃)를 초과한 온도의 합산을 뜻합니다. 예를 들어 <b>CDD 누적값이 4.5</b>라면, 그날 하루의 체감 평균기온이 <b>28.5℃ (24+4.5)</b>로 유지되었음을 의미하며 이 수치가 클수록 에너지가 급증합니다.
+															</p>
+														</div>
+													</div>
+												)}
+											</div>
+
+											{/* Summary KPIs */}
+											<section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+												<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-rose-500">
+													<span className="text-xs font-medium text-slate-500">기간 평균 기온</span>
+													<p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+														{avgTemp} <span className="text-sm font-normal text-slate-400">℃</span>
+													</p>
+												</div>
+												<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-brand-500">
+													<span className="text-xs font-medium text-slate-500">누적 냉방도일(CDD)</span>
+													<p className="text-xl sm:text-2xl font-bold text-brand-600 mt-1">{totalCDD}</p>
+												</div>
+												<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-orange-500">
+													<span className="text-xs font-medium text-slate-500">누적 난방도일(HDD)</span>
+													<p className="text-xl sm:text-2xl font-bold text-orange-600 mt-1">{totalHDD}</p>
+												</div>
+												<div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5 border-l-4 border-l-slate-800">
+													<span className="text-xs font-medium text-slate-500">최대 부하</span>
+													<p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+														{maxLoad} <span className="text-sm font-normal text-slate-400">kW</span>
+													</p>
+												</div>
+											</section>
+
+											{/* 차트 1: 추세선 */}
+											<div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm w-full">
+												<h3 className="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
+													<Icon name="bar-chart" /> 시계열 기온-전력 부하 동기화 패턴
+												</h3>
+												<p className="text-[11px] sm:text-xs text-slate-500 mb-4">시간 흐름에 따른 기온 상승이 전력 부하 곡선을 얼마나 유사하게 끌어올리는지 패턴을 입증합니다.</p>
+												<div className="relative h-64 sm:h-80 w-full min-w-0">
+													<canvas id="chartTrend"></canvas>
+												</div>
+											</div>
+
+											{/* 차트 2,3: 산점도 & 바차트 */}
+											<div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full">
+												<div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm w-full min-w-0">
+													<h3 className="text-sm font-bold text-slate-900 mb-1">기온 vs 전력 부하 (Scatter)</h3>
+													<p className="text-[11px] sm:text-xs text-slate-500 mb-4">임계점을 넘을 때 부하가 상승하는 비선형(U/V형) 관계를 도출합니다.</p>
+													<div className="relative h-64 sm:h-72 w-full">
+														<canvas id="chartScatter"></canvas>
+													</div>
+												</div>
+
+												<div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm w-full min-w-0">
+													<h3 className="text-sm font-bold text-slate-900 mb-1">일별 냉/난방 에너지 소비 지수</h3>
+													<p className="text-[11px] sm:text-xs text-slate-500 mb-4">기준 온도를 초과한 누적값(CDD/HDD)을 통해 실제 에너지 소요량을 비교합니다.</p>
+													<div className="relative h-64 sm:h-72 w-full">
+														<canvas id="chartBar"></canvas>
+													</div>
+												</div>
+											</div>
+										</div>
+									)}
+								</main>
+							</div>
 						</div>
 					</div>
 				);

@@ -3,10 +3,10 @@ window.GNB = function GNB() {
 	const currentPath = window.location.pathname;
 
 	const navLinks = [
-		{ path: "/", label: "홈 (대시보드)" },
+		{ path: "/", label: "대시보드" },
 		{ path: "/data.html", label: "1. 데이터 수집" },
 		{ path: "/eda.html", label: "2. 탐색적 분석(EDA)" },
-		{ path: "/predict.html", label: "3. 시계열 예측" },
+		{ path: "/forecast.html", label: "3. 시계열 예측" },
 		{ path: "/report.html", label: "4. 종합 리포트" },
 	];
 
